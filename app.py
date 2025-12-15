@@ -122,7 +122,6 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     cond_pag_emp = cond_emprestimo & proc.str.contains("pagamento", na=False)
     cond_rec_emp = cond_emprestimo & proc.str.contains("recebimento", na=False)
 
-    # Categoria para empréstimos
     df.loc[cond_pag_emp, "Categoria_final"] = (
         proc_original[cond_pag_emp] + " " + pessoa[cond_pag_emp]
     )
@@ -186,14 +185,12 @@ def converter_w4(df_w4, df_categorias_prep, setor):
 
     if setor == "Sinodalidade" and "Lote" in df.columns:
         centro_custo = df["Lote"].fillna("").astype(str).str.strip()
-        centro_custo = centro_custo.replace(
-            ["", "nan", "NaN"], "Adm Financeiro"
-        )
+        centro_custo = centro_custo.replace(["", "nan", "NaN"], "Adm Financeiro")
     else:
         centro_custo = ""
 
     # ============================
-    # MONTAGEM FINAL
+    # MONTAGEM FINAL (ORDEM CORRETA)
     # ============================
 
     out = pd.DataFrame()
@@ -203,9 +200,9 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     out["Valor"] = df["Valor_str_final"]
     out["Categoria"] = df["Categoria_final"]
     out["Descrição"] = df["Descrição"]
-    out["Centro de Custo"] = centro_custo
     out["Cliente/Fornecedor"] = ""
     out["CNPJ/CPF Cliente/Fornecedor"] = ""
+    out["Centro de Custo"] = centro_custo
     out["Observações"] = ""
 
     return out
