@@ -122,6 +122,7 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     cond_pag_emp = cond_emprestimo & proc.str.contains("pagamento", na=False)
     cond_rec_emp = cond_emprestimo & proc.str.contains("recebimento", na=False)
 
+    # Categoria para empréstimos
     df.loc[cond_pag_emp, "Categoria_final"] = (
         proc_original[cond_pag_emp] + " " + pessoa[cond_pag_emp]
     )
@@ -133,7 +134,11 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     df.loc[
         cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp,
         "Categoria_final"
-    ] = proc_original[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp] + " " + pessoa[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp]
+    ] = (
+        proc_original[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp]
+        + " "
+        + pessoa[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp]
+    )
 
     # ============================
     # CLASSIFICAÇÃO DESPESA / RECEITA
@@ -185,7 +190,9 @@ def converter_w4(df_w4, df_categorias_prep, setor):
 
     if setor == "Sinodalidade" and "Lote" in df.columns:
         centro_custo = df["Lote"].fillna("").astype(str).str.strip()
-        centro_custo = centro_custo.replace(["", "nan", "NaN"], "Adm Financeiro")
+        centro_custo = centro_custo.replace(
+            ["", "nan", "NaN"], "Adm Financeiro"
+        )
     else:
         centro_custo = ""
 
@@ -199,7 +206,15 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     out["Data de Pagamento"] = data_tes
     out["Valor"] = df["Valor_str_final"]
     out["Categoria"] = df["Categoria_final"]
-    out["Descrição"] = df["Descrição"]
+
+    # 🔥 CONCATENAR ID + DESCRIÇÃO
+    if "Id Item tesouraria" in df.columns:
+        out["Descrição"] = (
+            df["Id Item tesouraria"].astype(str) + " " + df["Descrição"].astype(str)
+        )
+    else:
+        out["Descrição"] = df["Descrição"]
+
     out["Cliente/Fornecedor"] = ""
     out["CNPJ/CPF Cliente/Fornecedor"] = ""
     out["Centro de Custo"] = centro_custo
