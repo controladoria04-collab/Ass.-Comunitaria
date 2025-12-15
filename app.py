@@ -79,7 +79,7 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     ].copy()
 
     # ============================
-    # CATEGORIAS
+    # CATEGORIAS BASE
     # ============================
 
     col_desc_cat = "Descrição da categoria financeira"
@@ -98,20 +98,47 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     )
 
     # ============================
-    # RECEITA / DESPESA
+    # PROCESSO / EMPRÉSTIMOS
     # ============================
 
     fluxo = df.get("Fluxo", pd.Series("", index=df.index)).astype(str).str.lower()
-    fluxo_vazio = fluxo.str.strip().isin(["", "none", "nan"])
+    fluxo_vazio = fluxo.str.strip().isin(["", "nan", "none"])
 
     cond_fluxo_receita = fluxo.str.contains("receita", na=False)
     cond_fluxo_despesa = fluxo.str.contains("despesa", na=False)
     cond_imobilizado = fluxo.str.contains("imobilizado", na=False)
 
-    proc = df.get("Processo", pd.Series("", index=df.index)).astype(str).str.lower()
+    proc_original = df.get("Processo", pd.Series("", index=df.index)).astype(str)
+    proc = proc_original.str.lower()
     proc = proc.apply(
-        lambda t: unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode("ascii")
+        lambda t: unicodedata.normalize("NFKD", t)
+        .encode("ascii", "ignore")
+        .decode("ascii")
     )
+
+    pessoa = df.get("Pessoa", pd.Series("", index=df.index)).astype(str)
+
+    cond_emprestimo = proc.str.contains("emprestimo", na=False)
+    cond_pag_emp = cond_emprestimo & proc.str.contains("pagamento", na=False)
+    cond_rec_emp = cond_emprestimo & proc.str.contains("recebimento", na=False)
+
+    # Categoria para empréstimos
+    df.loc[cond_pag_emp, "Categoria_final"] = (
+        proc_original[cond_pag_emp] + " " + pessoa[cond_pag_emp]
+    )
+
+    df.loc[cond_rec_emp, "Categoria_final"] = (
+        proc_original[cond_rec_emp] + " " + pessoa[cond_rec_emp]
+    )
+
+    df.loc[
+        cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp,
+        "Categoria_final"
+    ] = proc_original[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp] + " " + pessoa[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp]
+
+    # ============================
+    # CLASSIFICAÇÃO DESPESA / RECEITA
+    # ============================
 
     detalhe_lower = df[col_cat].astype(str).str.lower()
 
@@ -123,20 +150,23 @@ def converter_w4(df_w4, df_categorias_prep, setor):
         )
     )
 
-    cond_pagamento = fluxo_vazio & proc.str.contains("pagamento", na=False)
-    cond_recebimento = fluxo_vazio & proc.str.contains("recebimento", na=False)
+    cond_pag_proc = fluxo_vazio & proc.str.contains("pagamento", na=False)
+    cond_rec_proc = fluxo_vazio & proc.str.contains("recebimento", na=False)
 
     df["is_despesa"] = (
         cond_fluxo_despesa |
         cond_imobilizado |
         cond_palavra_despesa |
-        cond_pagamento
+        cond_pag_proc
     )
 
-    df.loc[cond_fluxo_receita | cond_recebimento, "is_despesa"] = False
+    df.loc[
+        cond_fluxo_receita | cond_rec_proc,
+        "is_despesa"
+    ] = False
 
     # ============================
-    # VALOR
+    # VALORES
     # ============================
 
     df["Valor_str_final"] = [
@@ -151,17 +181,11 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     data_tes = formatar_data_coluna(df["Data da Tesouraria"])
 
     # ============================
-    # CENTRO DE CUSTO (SINODALIDADE)
+    # CENTRO DE CUSTO — SINODALIDADE
     # ============================
 
     if setor == "Sinodalidade" and "Lote" in df.columns:
-        centro_custo = df["Lote"]
-
-        # trata NaN antes de virar string
-        centro_custo = centro_custo.fillna("")
-        centro_custo = centro_custo.astype(str).str.strip()
-
-        # vazio ou "nan" → Adm Financeiro
+        centro_custo = df["Lote"].fillna("").astype(str).str.strip()
         centro_custo = centro_custo.replace(
             ["", "nan", "NaN"], "Adm Financeiro"
         )
