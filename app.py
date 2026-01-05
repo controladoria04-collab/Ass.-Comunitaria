@@ -18,13 +18,6 @@ st.set_page_config(
 # ============================
 
 def normalize_text(texto):
-    """
-    Normaliza texto para comparação:
-    - minúsculo
-    - remove acentos
-    - troca pontuação por espaço
-    - remove espaços duplicados
-    """
     texto = str(texto).lower().strip()
     texto = ''.join(
         c for c in unicodedata.normalize('NFKD', texto)
@@ -68,7 +61,7 @@ def converter_valor(valor_str, is_despesa):
 
 
 # ============================
-# PREVIDÊNCIA: CLIENTES + MATCH ROBUSTO + CENTRO DE CUSTO
+# PREVIDÊNCIA: CLIENTES + MATCH FLEXÍVEL + CENTRO DE CUSTO
 # ============================
 
 CENTROS_CUSTO_VALIDOS = {"DIACONIA", "FORTALEZA", "BRASIL", "EXTERIOR"}
@@ -212,9 +205,10 @@ CLIENTES_PREVIDENCIA = [
 
 def _extrair_base_e_centro(cliente_str: str):
     """
-    Se terminar com ' - DIACONIA/FORTALEZA/BRASIL/EXTERIOR':
-      - base = tudo antes do último ' - '
+    Se terminar com " - DIACONIA/FORTALEZA/BRASIL/EXTERIOR":
+      - base = tudo antes do último " - "
       - centro = último item
+    Caso contrário, centro = "" e base = string inteira.
     """
     s = str(cliente_str).strip()
     partes = [p.strip() for p in s.split(" - ")]
@@ -237,16 +231,15 @@ for c in CLIENTES_PREVIDENCIA:
         "centro": centro
     })
 
-def _match_cliente_previdencia(complemento_norm: str):
+def _match_cliente_previdencia(complemento: str):
     """
-    Recebe complemento JÁ NORMALIZADO.
-    Match robusto:
-    - tokens em comum
-    - bônus forte se existir palavra "forte" (>=5 letras) que bate
-    - bônus substring para casos como "casa renata couras"
-    Retorna (cliente_oficial, centro) ou ("", "").
+    Match flexível:
+      - compara tokens do complemento com tokens da base do cliente
+      - score = interseção / tamanho da base (cobre bem casos como "LUBANGO")
+      - bônus por substring (ex: "casa renata couras")
+    Retorna (cliente_oficial, centro) ou ("", "") se não achar.
     """
-    comp_norm = str(complemento_norm).strip()
+    comp_norm = normalize_text(complemento)
     if not comp_norm:
         return "", ""
 
@@ -267,26 +260,24 @@ def _match_cliente_previdencia(complemento_norm: str):
         inter = tokens_comp & tokens_base
         inter_count = len(inter)
 
-        # cobertura da base
         score = inter_count / max(1, len(tokens_base))
 
-        # bônus: palavra forte bate exatamente (ex.: lubango, couras, parquelandia)
-        if any((t in tokens_base) and (len(t) >= 5) for t in tokens_comp):
-            score = max(score, 0.98)
-
-        # bônus substring
+        # bônus se um contiver o outro como substring (pega bases compostas)
         if info["base_norm"] and (info["base_norm"] in comp_norm or comp_norm in info["base_norm"]):
             score = max(score, 0.95)
 
-        # desempate
+        # desempate por score e depois por interseção
         if (score > melhor_score) or (score == melhor_score and inter_count > melhor_inter):
             melhor_score = score
             melhor_cliente = info["cliente_oficial"]
             melhor_centro = info["centro"]
             melhor_inter = inter_count
 
-    # Critérios mínimos (mais permissivos e práticos)
-    if melhor_cliente and (melhor_score >= 0.55 or melhor_inter >= 1):
+    # Critérios mínimos de aceitação:
+    # - score >= 0.60 (cobre 60% da base)
+    # OU
+    # - interseção >= 2 tokens (bom para clientes com base maior)
+    if melhor_cliente and (melhor_score >= 0.60 or melhor_inter >= 2):
         return melhor_cliente, melhor_centro
 
     return "", ""
@@ -330,36 +321,36 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     )
 
     # ============================
-    # PREVIDÊNCIA: REPASSE FUNDO DE PREVIDÊNCIA (detecção normalizada)
+    # PREVIDÊNCIA: REPASSE FUNDO DE PREVIDÊNCIA (match flexível)
     # ============================
-
     df["ClienteFornecedor_final"] = ""
     df["CentroCusto_final"] = ""
 
     if setor in ["Previdência Brasil", "Previdência"]:
-        base_txt_norm = normalize_text("Repasse Recebido Fundo de Previdência")
+        base_txt = "Repasse Recebido Fundo de Previdência"
 
-        detalhe_norm = df[col_cat].astype(str).apply(normalize_text)
-        mask_repasse = detalhe_norm.str.contains(base_txt_norm, na=False)
+        mask_repasse = df[col_cat].astype(str).str.contains(
+            base_txt, case=False, na=False
+        )
 
         if mask_repasse.any():
-            complemento_norm = (
-                detalhe_norm[mask_repasse]
-                .str.replace(base_txt_norm, "", regex=False)
+            complemento = (
+                df.loc[mask_repasse, col_cat]
+                .astype(str)
+                .str.replace(base_txt, "", case=False, regex=False)
                 .str.strip()
             )
 
-            resultados = complemento_norm.apply(_match_cliente_previdencia)
+            resultados = complemento.apply(_match_cliente_previdencia)
             clientes = resultados.apply(lambda x: x[0])
             centros = resultados.apply(lambda x: x[1])
 
-            # máscara final alinhada ao df
-            mask_achou = mask_repasse.copy()
-            mask_achou.loc[mask_repasse] = clientes.ne("").values
+            # Só aplica se achou cliente
+            mask_achou = mask_repasse & clientes.ne("")
 
             df.loc[mask_achou, "Categoria_final"] = "11318 - Repasse Recebido Fundo de Previdência"
-            df.loc[mask_achou, "ClienteFornecedor_final"] = clientes.values
-            df.loc[mask_achou, "CentroCusto_final"] = centros.values
+            df.loc[mask_achou, "ClienteFornecedor_final"] = clientes[mask_achou]
+            df.loc[mask_achou, "CentroCusto_final"] = centros[mask_achou]
 
     # ============================
     # PROCESSO / EMPRÉSTIMOS
@@ -465,7 +456,7 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     out["Valor"] = df["Valor_str_final"]
     out["Categoria"] = df["Categoria_final"]
 
-    # Descrição
+    # CONCATENAR ID + DESCRIÇÃO (se existir)
     if "Descrição" not in df.columns:
         df["Descrição"] = ""
 
@@ -476,14 +467,14 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     else:
         out["Descrição"] = df["Descrição"].astype(str)
 
-    # Cliente/Fornecedor (só Previdência preenche)
+    # Cliente/Fornecedor (Previdência)
     out["Cliente/Fornecedor"] = df.get("ClienteFornecedor_final", "")
 
     out["CNPJ/CPF Cliente/Fornecedor"] = ""
 
-    # Centro de custo:
-    # - Previdência: centro extraído do sufixo do cliente
-    # - Sinodalidade: Lote (como no seu código original)
+    # Centro de custo por setor:
+    # - Previdência: vem do sufixo do cliente (DIACONIA/FORTALEZA/BRASIL/EXTERIOR) quando houver match
+    # - Sinodalidade: vem do Lote (como antes)
     # - Outros: vazio
     if setor in ["Previdência Brasil", "Previdência"]:
         centro_custo_out = df.get("CentroCusto_final", "")
@@ -511,7 +502,7 @@ def carregar_arquivo_w4(arq):
 
 
 # ============================
-# CARREGAR CATEGORIAS (cache + erro amigável)
+# CARREGAR CATEGORIAS (com cache + erro amigável)
 # ============================
 
 @st.cache_data
