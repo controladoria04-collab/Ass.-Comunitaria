@@ -61,6 +61,151 @@ def converter_valor(valor_str, is_despesa):
 
 
 # ============================
+# MAPEAMENTO CLIENTES - PREVIDÊNCIA
+# ============================
+
+CLIENTES_PREVIDENCIA = [
+    "APARECIDA - BRASIL",
+    "ARACAJU - BRASIL",
+    "ARACATI - BRASIL",
+    "ARAPIRACA - BRASIL",
+    "ARARAQUARA - BRASIL",
+    "ASSESSORIA DE DIFUSÃO DA OBRA - DIACONIA",
+    "ASSESSORIA DE PROMOÇÃO HUMANA - DIACONIA",
+    "ASSESSORIA JOVEM - DIACONIA",
+    "ASSESSORIA LITURGICO - SACRAMENTAL - DIACONIA",
+    "ASSESSORIA VOCACIONAL - DIACONIA",
+    "ASSISTÊNCIA APOSTÓLICA - DIACONIA",
+    "ASSISTÊNCIA COMUNITÁRIA - DIACONIA",
+    "ASSISTÊNCIA DE COMUNICAÇÃO - DIACONIA",
+    "ASSISTÊNCIA DE FORMAÇÃO - DIACONIA",
+    "ASSISTÊNCIA LOCAL - FORTALEZA",
+    "ASSISTÊNCIA MISSIONÁRIA - DIACONIA",
+    "BEJAIA - EXTERIOR",
+    "BELÉM - BRASIL",
+    "BELO HORIZONTE - BRASIL",
+    "BOGOTÁ - EXTERIOR",
+    "BOSTON - EXTERIOR",
+    "BRASÍLIA - BRASIL",
+    "CABO VERDE - EXTERIOR",
+    "CAMPINA GRANDE - BRASIL",
+    "CAMPO GRANDE - BRASIL",
+    "CASA DE RETIRO - DIACONIA",
+    "CEST - CASA CONTEMPLATIVA - BRASIL",
+    "CEST - FORTALEZA",
+    "CEV - AQUIRAZ - FORTALEZA",
+    "CEV - CARMO - FORTALEZA",
+    "CEV - SHALOM CID. DOS FUNCIONÁRIOS - FORTALEZA",
+    "CEV - SHALOM CRISTO REDENTOR - FORTALEZA",
+    "CEV - SHALOM FÁTIMA - FORTALEZA",
+    "CEV - SHALOM PARANGABA - FORTALEZA",
+    "CEV - SHALOM PARQUELÂNDIA - FORTALEZA",
+    "CEV - SHALOM PAZ - FORTALEZA",
+    "CHAVES - BRASIL",
+    "COLÉGIO SHALOM - FORTALEZA",
+    "COORDENAÇÃO APOSTÓLICA - FORTALEZA",
+    "CRATEÚS - BRASIL",
+    "CRISMA - FORTALEZA",
+    "CRUZEIRO DO SUL - BRASIL",
+    "CUIABÁ - BRASIL",
+    "CURITIBA - BRASIL",
+    "DISCIPULADO EUSÉBIO - FORTALEZA",
+    "DISCIPULADO PACAJUS - FORTALEZA",
+    "DISCIPULADO QUIXADÁ - FORTALEZA",
+    "ECONOMATO GERAL - DIACONIA",
+    "EDIÇÕES - DIACONIA",
+    "ESCOLA DE EVANGELIZAÇÃO - FORTALEZA",
+    "ESCRITÓRIO GERAL - DIACONIA",
+    "ESC. SECRETÁRIA COMUNITÁRIA - FORTALEZA",
+    "FLORIANÓPOLIS - BRASIL",
+    "GARANHUNS - BRASIL",
+    "GOIÂNIA - BRASIL",
+    "GUARULHOS - BRASIL",
+    "GUIANA FRANCESA - EXTERIOR",
+    "HAIFA - EXTERIOR",
+    "IGREJA - DIACONIA",
+    "IMPERATRIZ - BRASIL",
+    "ITAPIPOCA - BRASIL",
+    "JOÃO PESSOA - BRASIL",
+    "JOINVILLE - BRASIL",
+    "JUAZEIRO DA BAHIA - BRASIL",
+    "JUAZEIRO DO NORTE - BRASIL",
+    "JUIZ DE FORA - BRASIL",
+    "LANÇAI AS REDES - DIACONIA",
+    "LANCHONETE - CEV FÁTIMA - FORTALEZA",
+    "LANCHONETE PARQUELÂNDIA - FORTALEZA",
+    "LANCHONETE - SHALOM DA PAZ - FORTALEZA",
+    "LIMA - EXTERIOR",
+    "LIVRARIA - CEV FÁTIMA - FORTALEZA",
+    "LIVRARIA - PARANGABA - FORTALEZA",
+    "LUBANGO - EXTERIOR",
+    "MACAPÁ - BRASIL",
+    "MACEIÓ - BRASIL",
+    "MADAGASCAR - EXTERIOR",
+    "MANAUS - BRASIL",
+    "MANILA - EXTERIOR",
+    "MATRIZ - FORTALEZA",
+    "MOÇAMBIQUE - EXTERIOR",
+    "MOSSORÓ - BRASIL",
+    "NATAL - BRASIL",
+    "NAZARETH - EXTERIOR",
+    "NITERÓI - BRASIL",
+    "PALMAS - BRASIL",
+    "PARNAÍBA - BRASIL",
+    "PARRESIA - DIACONIA",
+    "PATOS - BRASIL",
+    "PATOS DE MINAS - BRASIL",
+    "PH - CASA RENATA COURAS - FORTALEZA",
+    "PH - CASA RONALDO PEREIRA - FORTALEZA",
+    "PH - PROJETO AMIGO DOS POBRES - FORTALEZA",
+    "PH - PROJETO MARIA MADALENA - FORTALEZA",
+    "PH - SECRETARIA - FORTALEZA",
+    "PIRACICABA - BRASIL",
+    "PONTA GROSSA - BRASIL",
+    "PREFEITURA - DIACONIA",
+    "PROJETO ARTES - FORTALEZA",
+    "PROJETO JUVENTUDE - FORTALEZA",
+    "QUIXADÁ - BRASIL",
+    "RÁDIO SHALOM - FORTALEZA",
+    "RECIFE - BRASIL",
+    "REG - CID. DOS FUNCIONÁRIOS - FORTALEZA",
+    "REG.  PACAJUS - FORTALEZA",
+    "REG - PARANGABA - FORTALEZA",
+    "REG - PARQUELÂNDIA - FORTALEZA",
+    "RIO DE JANEIRO - BRASIL",
+    "ROMA - EXTERIOR",
+    "SALVADOR - BRASIL",
+    "SANTA CRUZ DE LA SIERRA - EXTERIOR",
+    "SANTO AMARO - BRASIL",
+    "SANTO ANDRÉ - BRASIL",
+    "SÃO LEOPOLDO - BRASIL",
+    "SÃO LUÍS - BRASIL",
+    "SÃO PAULO - PERDIZES - BRASIL",
+    "SÃO PAULO - TÁIPAS - BRASIL",
+    "SEC. DE COMUNICAÇÃO - FORTALEZA",
+    "SEC. DE SACERDOTES E SEMINARISTAS - DIACONIA",
+    "SECRETARIA DE PLANEJAMENTO - DIACONIA",
+    "SECRETARIA VOCACIONAL - FORTALEZA",
+    "SENHOR DO BONFIM - BRASIL",
+    "SETOR COLEGIADO - DIACONIA",
+    "SETOR DE EVENTOS - FORTALEZA",
+    "SETOR DOS CELIBATÁRIOS - DIACONIA",
+    "SETOR FAMÍLIA - DIACONIA",
+    "SOBRAL - BRASIL",
+    "TAIWAN - EXTERIOR",
+    "TECNOLOGIA DA INFORMAÇÃO - DIACONIA",
+    "TERESINA - BRASIL",
+    "TUNÍSIA - EXTERIOR",
+    "UBERABA - BRASIL",
+    "VITÓRIA - BRASIL",
+    "VITÓRIA DA CONQUISTA - BRASIL",
+]
+
+# chave normalizada -> valor oficial
+CLIENTE_MAP_PREV = {normalize_text(x): x for x in CLIENTES_PREVIDENCIA}
+
+
+# ============================
 # FUNÇÃO PRINCIPAL
 # ============================
 
@@ -96,6 +241,34 @@ def converter_w4(df_w4, df_categorias_prep, setor):
         df[col_desc_cat].notna(),
         df[col_cat]
     )
+
+    # ============================
+    # REGRA PREVIDÊNCIA: REPASSE FUNDO DE PREVIDÊNCIA
+    # ============================
+    df["ClienteFornecedor_final"] = ""
+
+    if setor in ["Previdência Brasil", "Previdência"]:
+        base_txt = "Repasse Recebido Fundo de Previdência"
+
+        mask_repasse = df[col_cat].astype(str).str.contains(
+            base_txt, case=False, na=False
+        )
+
+        if mask_repasse.any():
+            complemento = (
+                df.loc[mask_repasse, col_cat]
+                .astype(str)
+                .str.replace(base_txt, "", case=False, regex=False)
+                .str.strip()
+            )
+
+            complemento_norm = complemento.apply(normalize_text)
+            cliente_oficial = complemento_norm.map(CLIENTE_MAP_PREV)
+
+            # Só aplica quando achou cliente na lista
+            mask_achou = mask_repasse & cliente_oficial.notna()
+            df.loc[mask_achou, "Categoria_final"] = "11318 - Repasse Recebido Fundo de Previdência"
+            df.loc[mask_achou, "ClienteFornecedor_final"] = cliente_oficial[mask_achou]
 
     # ============================
     # PROCESSO / EMPRÉSTIMOS
@@ -173,6 +346,9 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     # VALORES
     # ============================
 
+    if "Valor total" not in df.columns:
+        raise ValueError("Coluna 'Valor total' não existe no W4.")
+
     df["Valor_str_final"] = [
         converter_valor(v, d)
         for v, d in zip(df["Valor total"], df["is_despesa"])
@@ -181,6 +357,9 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     # ============================
     # DATAS
     # ============================
+
+    if "Data da Tesouraria" not in df.columns:
+        raise ValueError("Coluna 'Data da Tesouraria' não existe no W4.")
 
     data_tes = formatar_data_coluna(df["Data da Tesouraria"])
 
@@ -207,15 +386,20 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     out["Valor"] = df["Valor_str_final"]
     out["Categoria"] = df["Categoria_final"]
 
-    # 🔥 CONCATENAR ID + DESCRIÇÃO
+    # CONCATENAR ID + DESCRIÇÃO (se existir)
+    if "Descrição" not in df.columns:
+        df["Descrição"] = ""
+
     if "Id Item tesouraria" in df.columns:
         out["Descrição"] = (
             df["Id Item tesouraria"].astype(str) + " " + df["Descrição"].astype(str)
         )
     else:
-        out["Descrição"] = df["Descrição"]
+        out["Descrição"] = df["Descrição"].astype(str)
 
-    out["Cliente/Fornecedor"] = ""
+    # Cliente/Fornecedor (preenchido pela regra da Previdência quando aplicável)
+    out["Cliente/Fornecedor"] = df.get("ClienteFornecedor_final", "")
+
     out["CNPJ/CPF Cliente/Fornecedor"] = ""
     out["Centro de Custo"] = centro_custo
     out["Observações"] = ""
