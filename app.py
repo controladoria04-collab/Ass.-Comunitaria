@@ -119,9 +119,9 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
                 # Cliente permanece inteiro
                 df.loc[mask, "Cliente/Fornecedor"] = cliente_raw
 
-                # Centro de custo recebe apenas o sufixo após "-"
+                # Centro de custo usa o texto após o ÚLTIMO "-"
                 if "-" in cliente_raw:
-                    centro = cliente_raw.split("-", 1)[1].strip().upper()
+                    centro = cliente_raw.rsplit("-", 1)[1].strip().upper()
                     df.loc[mask, "Centro de Custo"] = centro
 
     # ============================
