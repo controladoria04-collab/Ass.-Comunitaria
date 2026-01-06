@@ -68,246 +68,181 @@ def converter_valor(valor_str, is_despesa):
 
 
 # ============================
-# PREVIDÊNCIA: CLIENTES + MATCH ROBUSTO + CENTRO DE CUSTO
+# PREVIDÊNCIA: MAPEAMENTO DIRETO (texto do W4 -> Cliente/Fornecedor)
 # ============================
 
-CENTROS_CUSTO_VALIDOS = {"DIACONIA", "FORTALEZA", "BRASIL", "EXTERIOR"}
+CENTROS_CUSTO_VALIDOS = {"FORTALEZA", "DIACONIA", "EXTERIOR", "BRASIL"}
 
-CLIENTES_PREVIDENCIA = [
-    "APARECIDA - BRASIL",
-    "ARACAJU - BRASIL",
-    "ARACATI - BRASIL",
-    "ARAPIRACA - BRASIL",
-    "ARARAQUARA - BRASIL",
-    "ASSESSORIA DE DIFUSÃO DA OBRA - DIACONIA",
-    "ASSESSORIA DE PROMOÇÃO HUMANA - DIACONIA",
-    "ASSESSORIA JOVEM - DIACONIA",
-    "ASSESSORIA LITURGICO - SACRAMENTAL - DIACONIA",
-    "ASSESSORIA VOCACIONAL - DIACONIA",
-    "ASSISTÊNCIA APOSTÓLICA - DIACONIA",
-    "ASSISTÊNCIA COMUNITÁRIA - DIACONIA",
-    "ASSISTÊNCIA DE COMUNICAÇÃO - DIACONIA",
-    "ASSISTÊNCIA DE FORMAÇÃO - DIACONIA",
-    "ASSISTÊNCIA LOCAL - FORTALEZA",
-    "ASSISTÊNCIA MISSIONÁRIA - DIACONIA",
-    "BEJAIA - EXTERIOR",
-    "BELÉM - BRASIL",
-    "BELO HORIZONTE - BRASIL",
-    "BOGOTÁ - EXTERIOR",
-    "BOSTON - EXTERIOR",
-    "BRASÍLIA - BRASIL",
-    "CABO VERDE - EXTERIOR",
-    "CAMPINA GRANDE - BRASIL",
-    "CAMPO GRANDE - BRASIL",
-    "CASA DE RETIRO - DIACONIA",
-    "CEST - CASA CONTEMPLATIVA - BRASIL",
-    "CEST - FORTALEZA",
-    "CEV - AQUIRAZ - FORTALEZA",
-    "CEV - CARMO - FORTALEZA",
-    "CEV - SHALOM CID. DOS FUNCIONÁRIOS - FORTALEZA",
-    "CEV - SHALOM CRISTO REDENTOR - FORTALEZA",
-    "CEV - SHALOM FÁTIMA - FORTALEZA",
-    "CEV - SHALOM PARANGABA - FORTALEZA",
-    "CEV - SHALOM PARQUELÂNDIA - FORTALEZA",
-    "CEV - SHALOM PAZ - FORTALEZA",
-    "CHAVES - BRASIL",
-    "COLÉGIO SHALOM - FORTALEZA",
-    "COORDENAÇÃO APOSTÓLICA - FORTALEZA",
-    "CRATEÚS - BRASIL",
-    "CRISMA - FORTALEZA",
-    "CRUZEIRO DO SUL - BRASIL",
-    "CUIABÁ - BRASIL",
-    "CURITIBA - BRASIL",
-    "DISCIPULADO EUSÉBIO - FORTALEZA",
-    "DISCIPULADO PACAJUS - FORTALEZA",
-    "DISCIPULADO QUIXADÁ - FORTALEZA",
-    "ECONOMATO GERAL - DIACONIA",
-    "EDIÇÕES - DIACONIA",
-    "ESCOLA DE EVANGELIZAÇÃO - FORTALEZA",
-    "ESCRITÓRIO GERAL - DIACONIA",
-    "ESC. SECRETÁRIA COMUNITÁRIA - FORTALEZA",
-    "FLORIANÓPOLIS - BRASIL",
-    "GARANHUNS - BRASIL",
-    "GOIÂNIA - BRASIL",
-    "GUARULHOS - BRASIL",
-    "GUIANA FRANCESA - EXTERIOR",
-    "HAIFA - EXTERIOR",
-    "IGREJA - DIACONIA",
-    "IMPERATRIZ - BRASIL",
-    "ITAPIPOCA - BRASIL",
-    "JOÃO PESSOA - BRASIL",
-    "JOINVILLE - BRASIL",
-    "JUAZEIRO DA BAHIA - BRASIL",
-    "JUAZEIRO DO NORTE - BRASIL",
-    "JUIZ DE FORA - BRASIL",
-    "LANÇAI AS REDES - DIACONIA",
-    "LANCHONETE - CEV FÁTIMA - FORTALEZA",
-    "LANCHONETE PARQUELÂNDIA - FORTALEZA",
-    "LANCHONETE - SHALOM DA PAZ - FORTALEZA",
-    "LIMA - EXTERIOR",
-    "LIVRARIA - CEV FÁTIMA - FORTALEZA",
-    "LIVRARIA - PARANGABA - FORTALEZA",
-    "LUBANGO - EXTERIOR",
-    "MACAPÁ - BRASIL",
-    "MACEIÓ - BRASIL",
-    "MADAGASCAR - EXTERIOR",
-    "MANAUS - BRASIL",
-    "MANILA - EXTERIOR",
-    "MATRIZ - FORTALEZA",
-    "MOÇAMBIQUE - EXTERIOR",
-    "MOSSORÓ - BRASIL",
-    "NATAL - BRASIL",
-    "NAZARETH - EXTERIOR",
-    "NITERÓI - BRASIL",
-    "PALMAS - BRASIL",
-    "PARNAÍBA - BRASIL",
-    "PARRESIA - DIACONIA",
-    "PATOS - BRASIL",
-    "PATOS DE MINAS - BRASIL",
-    "PH - CASA RENATA COURAS - FORTALEZA",
-    "PH - CASA RONALDO PEREIRA - FORTALEZA",
-    "PH - PROJETO AMIGO DOS POBRES - FORTALEZA",
-    "PH - PROJETO MARIA MADALENA - FORTALEZA",
-    "PH - SECRETARIA - FORTALEZA",
-    "PIRACICABA - BRASIL",
-    "PONTA GROSSA - BRASIL",
-    "PREFEITURA - DIACONIA",
-    "PROJETO ARTES - FORTALEZA",
-    "PROJETO JUVENTUDE - FORTALEZA",
-    "QUIXADÁ - BRASIL",
-    "RÁDIO SHALOM - FORTALEZA",
-    "RECIFE - BRASIL",
-    "REG - CID. DOS FUNCIONÁRIOS - FORTALEZA",
-    "REG.  PACAJUS - FORTALEZA",
-    "REG - PARANGABA - FORTALEZA",
-    "REG - PARQUELÂNDIA - FORTALEZA",
-    "RIO DE JANEIRO - BRASIL",
-    "ROMA - EXTERIOR",
-    "SALVADOR - BRASIL",
-    "SANTA CRUZ DE LA SIERRA - EXTERIOR",
-    "SANTO AMARO - BRASIL",
-    "SANTO ANDRÉ - BRASIL",
-    "SÃO LEOPOLDO - BRASIL",
-    "SÃO LUÍS - BRASIL",
-    "SÃO PAULO - PERDIZES - BRASIL",
-    "SÃO PAULO - TÁIPAS - BRASIL",
-    "SEC. DE COMUNICAÇÃO - FORTALEZA",
-    "SEC. DE SACERDOTES E SEMINARISTAS - DIACONIA",
-    "SECRETARIA DE PLANEJAMENTO - DIACONIA",
-    "SECRETARIA VOCACIONAL - FORTALEZA",
-    "SENHOR DO BONFIM - BRASIL",
-    "SETOR COLEGIADO - DIACONIA",
-    "SETOR DE EVENTOS - FORTALEZA",
-    "SETOR DOS CELIBATÁRIOS - DIACONIA",
-    "SETOR FAMÍLLIA - DIACONIA",
-    "SOBRAL - BRASIL",
-    "TAIWAN - EXTERIOR",
-    "TECNOLOGIA DA INFORMAÇÃO - DIACONIA",
-    "TERESINA - BRASIL",
-    "TUNÍSIA - EXTERIOR",
-    "UBERABA - BRASIL",
-    "VITÓRIA - BRASIL",
-    "VITÓRIA DA CONQUISTA - BRASIL",
+# Cada item: (CLIENTE_OFICIAL, TEXTO_W4)
+# Regra: se "Detalhe Conta / Objeto" contiver TEXTO_W4 -> preenche cliente e troca categoria
+MAPEAMENTO_PREVIDENCIA = [
+    # --- (trecho anterior) ---
+    ("APARECIDA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aparecida"),
+    ("ARACAJU - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aracaju"),
+    ("ARACATI - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aracati"),
+    ("ARAPIRACA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Arapiraca"),
+    ("ARARAQUARA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Araraquara"),
+    ("ASSESSORIA DE DIFUSÃO DA OBRA - DIACONIA", "Repasse Recebido Fundo de Previdência Difusão da Obra"),
+    ("ASSESSORIA DE PROMOÇÃO HUMANA - DIACONIA", "Repasse Recebido Fundo de Previdência Assessoria de Promoção Humana"),
+    ("ASSESSORIA JOVEM - DIACONIA", "Repasse Recebido Fundo de Previdência Assessoria Jovem"),
+    ("ASSESSORIA LITURGICO - SACRAMENTAL - DIACONIA", "Repasse Recebido Fundo de Previdência Litúrgico Sacramental"),
+    ("ASSESSORIA VOCACIONAL - DIACONIA", "Repasse Recebido Fundo de Previdência Assessoria Vocacional"),
+    ("ASSISTÊNCIA APOSTÓLICA - DIACONIA", "Repasse Recebido Fundo de Previdência Assistência Apostólica"),
+    ("ASSISTÊNCIA COMUNITÁRIA - DIACONIA", "Repasse Recebido Fundo de Previdência Assessoria Comunitária"),
+    ("ASSISTÊNCIA DE COMUNICAÇÃO - DIACONIA", "Repasse Recebido Fundo de Previdência Assistencia de Comunicação"),
+    ("ASSISTÊNCIA DE FORMAÇÃO - DIACONIA", "Repasse Recebido Fundo de Previdência Assistência de Formação"),
+    ("ASSISTÊNCIA LOCAL - FORTALEZA", "Repasse Recebido Fundo de Previdência Assistência Local"),
+    ("ASSISTÊNCIA MISSIONÁRIA - DIACONIA", "Repasse Recebido Fundo de Previdência Assistência Missionária"),
+    ("BEJAIA - EXTERIOR", "Repasse Recebido Fundo de Previdência Bejaia"),
+    ("BELÉM - BRASIL", "Repasse Recebido Fundo de Previdência Missão Belém"),
+    ("BELO HORIZONTE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Belo Horizonte"),
+    ("BOGOTÁ - EXTERIOR", "Repasse Recebido Fundo de Previdência Bogotá"),
+    ("BOSTON - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Boston"),
+    ("BRASÍLIA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Brasília"),
+    ("CABO VERDE - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Cabo Verde"),
+    ("CAMPINA GRANDE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Campina Grande"),
+    ("CAMPO GRANDE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Campo Grande"),
+    ("CASA DE RETIRO - DIACONIA", "Repasse Recebido Fundo de Previdência Casa de Retiro São João Paulo II"),
+    ("CEST - CASA CONTEMPLATIVA - BRASIL", "Repasse Recebido Fundo de Previdência Casa Contemplativa"),
+    ("CEST - FORTALEZA", "Repasse Recebido Fundo de Previdência CEST Fortaleza"),
+    ("CEV - AQUIRAZ - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Aquiraz"),
+    ("CEV - CARMO - FORTALEZA", "Repasse Recebido Livraria CEV Nossa Sra do Carmo"),
+    ("CEV - SHALOM CID. DOS FUNCIONÁRIOS - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Cidade dos Funcionários"),
+    ("CEV - SHALOM CRISTO REDENTOR - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Cristo Redentor"),
+    ("CEV - SHALOM FÁTIMA - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Fátima"),
+    ("CEV - SHALOM PARANGABA - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Parangaba"),
+    ("CEV - SHALOM PARQUELÂNDIA - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Parquelandia"),
+    ("CEV - SHALOM PAZ - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Shalom da Paz"),
+    ("CHAVES - BRASIL", "Repasse Recebido Fundo de Previdência Missão Chaves"),
+    ("COLÉGIO SHALOM - FORTALEZA", "Repasse Recebido Fundo de Previdência Colégio Shalom"),
+    ("COORDENAÇÃO APOSTÓLICA - FORTALEZA", "Repasse Recebido Fundo de Previdência Coordenação Apostólica"),
+    ("CRATEÚS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Crateús"),
+    ("CRISMA - FORTALEZA", "Repasse Recebido Fundo de Previdência Crisma"),
+    ("CRUZEIRO DO SUL - BRASIL", "Repasse Recebido Fundo de Previdência Missão Cruzeiro do Sul"),
+    ("CUIABÁ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Cuiabá"),
+    ("CURITIBA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Curitiba"),
+    ("DISCIPULADO EUSÉBIO - FORTALEZA", "Repasse Recebido Fundo de Previdência Discipulado Eusébio"),
+    ("DISCIPULADO PACAJUS - FORTALEZA", "Repasse Recebido Fundo de Previdência Discipulado Pacajus"),
+    ("DISCIPULADO QUIXADÁ - FORTALEZA", "Repasse Recebido Fundo de Previdência Discipulado Quixadá"),
+    ("ECONOMATO GERAL - DIACONIA", "Repasse Recebido Fundo de Previdência Economato Diaconia"),
+    ("EDIÇÕES - DIACONIA", "Repasse Recebido Fundo de Previdência Edições Shalom"),
+    ("ESCOLA DE EVANGELIZAÇÃO - FORTALEZA", "Repasse Recebido Fundo de Previdência Escola de Evangelização"),
+    ("ESCRITÓRIO GERAL - DIACONIA", "Repasse Recebido Fundo de Previdência Escritório Geral"),
+    ("ESC. SECRETÁRIA COMUNITÁRIA - FORTALEZA", "Repasse Recebido Fundo de Previdência Secretaria Comunitária Fortaleza"),
+    ("FLORIANÓPOLIS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Florianópolis"),
+    ("GARANHUNS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Garanhuns"),
+    ("GOIÂNIA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Goiânia"),
+    ("GUARULHOS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Guarulhos"),
+    ("GUIANA FRANCESA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Guiana Francesa"),
+    ("HAIFA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Haifa"),
+    ("IGREJA - DIACONIA", "Repasse Recebido Fundo de Previdência Igreja do Ressuscitado"),
+    ("IMPERATRIZ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Imperatriz"),
+    ("ITAPIPOCA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Itapipoca"),
+    ("JOÃO PESSOA - BRASIL", "Repasse Recebido Fundo de Previdência Missão João Pessoa"),
+    ("JOINVILLE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Joinville"),
+    ("JUAZEIRO DA BAHIA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Juazeiro da Bahia"),
+    ("JUAZEIRO DO NORTE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Juazeiro do Norte"),
+    ("JUIZ DE FORA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Juiz de Fora"),
+    ("LANÇAI AS REDES - DIACONIA", "Repasse Recebido Fundo de Previdência Lançai as Redes"),
+    ("LANCHONETE PARQUELÂNDIA - FORTALEZA", "Repasse Recebido Fundo de Previdência Lanchonete Parquelandia"),
+    ("LANCHONETE - SHALOM DA PAZ - FORTALEZA", "Repasse Recebido Fundo de Previdência Lanchonete Shalom da Paz"),
+    ("LIMA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Lima"),
+    ("LIVRARIA - PARANGABA - FORTALEZA", "Repasse Recebido Fundo de Previdência Livraria Parangaba"),
+    ("LUBANGO - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Lubango"),
+    ("MACAPÁ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Macapá"),
+    ("MACEIÓ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Maceió"),
+    ("MADAGASCAR - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Madagascar"),
+    ("MANAUS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Manaus"),
+    ("MANILA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Manila"),
+    ("MATRIZ - FORTALEZA", "Repasse Recebido Fundo de Previdência Matriz"),
+    ("MOÇAMBIQUE - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Moçambique"),
+    ("MOSSORÓ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Mossoró"),
+    ("NATAL - BRASIL", "Repasse Recebido Fundo de Previdência Missão Natal"),
+    ("NAZARETH - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Nazareth"),
+    ("NITERÓI - BRASIL", "Repasse Recebido Fundo de Previdência Missão Niterói"),
+    ("PALMAS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Palmas"),
+    ("PARNAÍBA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Parnaíba"),
+    ("PARRESIA - DIACONIA", "Repasse Recebido Fundo de Previdência Instituto Parresia"),
+    ("PATOS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Patos"),
+    ("PATOS DE MINAS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Patos de Minas"),
+    ("PH - CASA RENATA COURAS - FORTALEZA", "Repasse Recebido Fundo de Previdência Casa Renata Couras"),
+    ("PH - CASA RONALDO PEREIRA - FORTALEZA", "Repasse Recebido Fundo de Previdência Casa Ronaldo Pereira"),
+    ("PH - PROJETO AMIGO DOS POBRES - FORTALEZA", "Repasse Recebido Fundo de Previdência Projeto Amigo dos Pobres"),
+    ("PH - PROJETO MARIA MADALENA - FORTALEZA", "Repasse Recebido Fundo de Previdência Projeto Maria Madalena"),
+    ("PH - SECRETARIA - FORTALEZA", "Repasse Recebido Fundo de Previdência Secretaria de PH Fortaleza"),
+
+    # --- (NOVOS ITENS QUE VOCÊ PEDIU) ---
+    ("PIRACICABA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Piracicaba"),
+    ("PONTA GROSSA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Ponta Grossa"),
+    ("PREFEITURA - DIACONIA", "Repasse Recebido Fundo de Previdência Prefeitura"),
+    ("PROJETO ARTES - FORTALEZA", "Repasse Recebido Fundo de Previdência Projeto Artes"),
+    ("PROJETO JUVENTUDE - FORTALEZA", "Repasse Recebido Fundo de Previdência Projeto Juventude Fortaleza"),
+    ("QUIXADÁ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Quixadá"),
+    ("RÁDIO SHALOM - FORTALEZA", "Repasse Recebido Fundo de Previdência Rádio Shalom AM 690"),
+    ("RECIFE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Recife"),
+    ("REG - CID. DOS FUNCIONÁRIOS - FORTALEZA", "Repasse Recebido Fundo de Previdência Regional Shalom Cidade dos Funcionários"),
+    ("REG.  PACAJUS - FORTALEZA", "Repasse Recebido Fundo de Previdência Pacajus"),
+    ("REG - PARANGABA - FORTALEZA", "Repasse Recebido Fundo de Previdência Regional Shalom Parangaba"),
+    ("REG - PARQUELÂNDIA - FORTALEZA", "Repasse Recebido Fundo de Previdência Regional Shalom Parquelandia"),
+    ("RIO DE JANEIRO - BRASIL", "Repasse Recebido Fundo de Previdência Missão Rio de Janeiro"),
+    ("ROMA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Roma"),
+    ("SALVADOR - BRASIL", "Repasse Recebido Fundo de Previdência Missão Salvador"),
+    ("SANTA CRUZ DE LA SIERRA - EXTERIOR", "Repasse Recebido Fundo de Previdência Santa Cruz de La Sierra"),
+    ("SANTO AMARO - BRASIL", "Repasse Recebido Fundo de Previdência Missão Santo Amaro"),
+    ("SANTO ANDRÉ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Santo André"),
+    ("SÃO LEOPOLDO - BRASIL", "Repasse Recebido Fundo de Previdência Missão São Leopoldo"),
+    ("SÃO LUÍS - BRASIL", "Repasse Recebido Fundo de Previdência Missão São Luis"),
+    ("SÃO PAULO - PERDIZES - BRASIL", "Repasse Recebido Fundo de Previdência Missão São Paulo"),
+    ("SÃO PAULO - TÁIPAS - BRASIL", "Repasse Recebido Fundo de Previdência Missão São Paulo"),
+    ("SEC. DE COMUNICAÇÃO - FORTALEZA", "Repasse Recebido Fundo de Previdência Secretaria de Comunicação"),
+    ("SEC. DE SACERDOTES E SEMINARISTAS - DIACONIA", "Repasse Recebido Fundo de Previdência Sacerdotes e Seminaristas"),
+    ("SECRETARIA DE PLANEJAMENTO - DIACONIA", "Repasse Recebido Fundo de Previdência Secretaria de Planejamento"),
+    ("SECRETARIA VOCACIONAL - FORTALEZA", "Repasse Recebido Fundo de Previdência Secretaria Vocacional Fortaleza"),
+    ("SENHOR DO BONFIM - BRASIL", "Repasse Recebido Fundo de Previdência Missão Senhor do Bonfim"),
+    ("SETOR COLEGIADO - DIACONIA", "Repasse Recebido Fundo de Previdência Setor Colegiado"),
+    ("SETOR DE EVENTOS - FORTALEZA", "Repasse Recebido Fundo de Previdência Setor de Eventos Fortaleza"),
+    ("SETOR DOS CELIBATÁRIOS - DIACONIA", "Repasse Recebido Fundo de Previdência Setor Celibatários"),
+    ("SETOR FAMÍLLIA - DIACONIA", "Repasse Recebido Fundo de Previdência Setor Familias"),
+    ("SOBRAL - BRASIL", "Repasse Recebido Fundo de Previdência Missão Sobral"),
+    ("TAIWAN - EXTERIOR", "Repasse Recebido Fundo de Previdência Taiwan"),
+    ("TECNOLOGIA DA INFORMAÇÃO - DIACONIA", "Repasse Recebido Tecnologia da Informação"),
+    ("TERESINA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Teresina"),
+    ("TUNÍSIA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Tunísia"),
+    ("UBERABA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Uberaba"),
+    ("VITÓRIA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Vitória ES"),
+    ("VITÓRIA DA CONQUISTA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Vitória da Conquista - Difusão"),
 ]
 
-def _extrair_base_e_centro(cliente_str: str):
+# Pré-normaliza para busca rápida e resistente a acentos/pontuação
+MAPEAMENTO_PREVIDENCIA_NORM = [
+    (cliente, normalize_text(texto_w4))
+    for cliente, texto_w4 in MAPEAMENTO_PREVIDENCIA
+]
+
+def extrair_centro_custo_do_cliente(cliente: str) -> str:
     """
-    Se terminar com ' - DIACONIA/FORTALEZA/BRASIL/EXTERIOR':
-      - base = tudo antes do último ' - '
-      - centro = último item
-    Caso contrário, centro = "" e base = string inteira.
+    Centro de custo é o texto após o ÚLTIMO ' - ' do cliente, se for válido.
+    Ex.: 'LUBANGO - EXTERIOR' -> 'EXTERIOR'
+    Ex.: 'PH - CASA RENATA COURAS - FORTALEZA' -> 'FORTALEZA'
     """
-    s = str(cliente_str).strip()
-    partes = [p.strip() for p in s.split(" - ")]
-    if len(partes) >= 2 and partes[-1].upper() in CENTROS_CUSTO_VALIDOS:
-        centro = partes[-1].upper()
-        base = " - ".join(partes[:-1]).strip()
-        return base, centro
-    return s, ""
-
-# Pré-processa clientes
-CLIENTES_PREV_INFO = []
-for c in CLIENTES_PREVIDENCIA:
-    base, centro = _extrair_base_e_centro(c)
-    base_norm = normalize_text(base)
-    tokens_base = set(base_norm.split()) if base_norm else set()
-    CLIENTES_PREV_INFO.append({
-        "cliente_oficial": c,
-        "base_norm": base_norm,
-        "tokens_base": tokens_base,
-        "centro": centro
-    })
-
-def _match_cliente_previdencia(complemento_norm: str):
-    """
-    Recebe complemento JÁ NORMALIZADO (sem acento/pontuação).
-    Estratégia:
-    - tokens em comum
-    - bônus se existir token "forte" (>=5 letras) em comum
-    - bônus substring para casos compostos
-    Retorna (cliente_oficial, centro) ou ("", "").
-    """
-    comp_norm = str(complemento_norm).strip()
-    if not comp_norm:
-        return "", ""
-
-    tokens_comp = set(comp_norm.split())
-    if not tokens_comp:
-        return "", ""
-
-    melhor_cliente = ""
-    melhor_centro = ""
-    melhor_score = -1.0
-    melhor_inter = -1
-
-    for info in CLIENTES_PREV_INFO:
-        tokens_base = info["tokens_base"]
-        if not tokens_base:
-            continue
-
-        inter = tokens_comp & tokens_base
-        inter_count = len(inter)
-
-        # cobertura da base
-        score = inter_count / max(1, len(tokens_base))
-
-        # bônus forte: token >= 5 letras bate (lubango/couras/parquelandia etc)
-        if any((t in tokens_base) and (len(t) >= 5) for t in tokens_comp):
-            score = max(score, 0.99)
-
-        # bônus substring
-        if info["base_norm"] and (info["base_norm"] in comp_norm or comp_norm in info["base_norm"]):
-            score = max(score, 0.95)
-
-        # desempate: score, depois inter_count, depois base menor (mais específico)
-        if (score > melhor_score) or (score == melhor_score and inter_count > melhor_inter):
-            melhor_score = score
-            melhor_inter = inter_count
-            melhor_cliente = info["cliente_oficial"]
-            melhor_centro = info["centro"]
-
-    # Aceitação (bem prática):
-    # - se houve ao menos 1 token em comum e o score é razoável
-    if melhor_cliente and (melhor_inter >= 1) and (melhor_score >= 0.50):
-        return melhor_cliente, melhor_centro
-
-    return "", ""
+    partes = [p.strip() for p in str(cliente).split(" - ")]
+    if partes and partes[-1].upper() in CENTROS_CUSTO_VALIDOS:
+        return partes[-1].upper()
+    return ""
 
 
 # ============================
 # FUNÇÃO PRINCIPAL
 # ============================
 
-def converter_w4(df_w4, df_categorias_prep, setor, debug=False):
+def converter_w4(df_w4, df_categorias_prep, setor):
 
-    # Higieniza nomes das colunas (mata espaços invisíveis)
     df_w4 = df_w4.copy()
     df_w4.columns = df_w4.columns.astype(str).str.strip()
 
     if "Detalhe Conta / Objeto" not in df_w4.columns:
         raise ValueError(
-            f"Coluna 'Detalhe Conta / Objeto' não existe no W4. "
-            f"Colunas encontradas: {list(df_w4.columns)}"
+            f"Coluna 'Detalhe Conta / Objeto' não existe no W4. Colunas: {list(df_w4.columns)}"
         )
 
     col_cat = "Detalhe Conta / Objeto"
@@ -339,50 +274,21 @@ def converter_w4(df_w4, df_categorias_prep, setor, debug=False):
     )
 
     # ============================
-    # PREVIDÊNCIA: REPASSE FUNDO DE PREVIDÊNCIA (detecção 100% normalizada)
+    # PREVIDÊNCIA: MAPEAMENTO DIRETO
     # ============================
 
     df["ClienteFornecedor_final"] = ""
     df["CentroCusto_final"] = ""
 
     if str(setor).strip() == "Previdência Brasil":
-        base_txt_norm = normalize_text("Repasse Recebido Fundo de Previdência")
-
         detalhe_norm = df[col_cat].astype(str).apply(normalize_text)
-        mask_repasse = detalhe_norm.str.contains(base_txt_norm, na=False)
 
-        if debug:
-            st.write("DEBUG | repasses detectados:", int(mask_repasse.sum()))
-            if int(mask_repasse.sum()) > 0:
-                st.write("DEBUG | exemplos de detalhe_norm (top 5):")
-                st.write(detalhe_norm[mask_repasse].head(5).tolist())
-
-        if mask_repasse.any():
-            complemento_norm = (
-                detalhe_norm[mask_repasse]
-                .str.replace(base_txt_norm, "", regex=False)
-                .str.strip()
-            )
-
-            resultados = complemento_norm.apply(_match_cliente_previdencia)
-            clientes = resultados.apply(lambda x: x[0])
-            centros = resultados.apply(lambda x: x[1])
-
-            if debug:
-                st.write("DEBUG | exemplos de complemento_norm (top 10):")
-                st.write(complemento_norm.head(10).tolist())
-                st.write("DEBUG | exemplos de clientes encontrados (top 10):")
-                st.write(clientes.head(10).tolist())
-                st.write("DEBUG | exemplos de centros encontrados (top 10):")
-                st.write(centros.head(10).tolist())
-
-            # Só aplica se achou cliente
-            mask_achou = mask_repasse.copy()
-            mask_achou.loc[mask_repasse] = clientes.ne("").values
-
-            df.loc[mask_achou, "Categoria_final"] = "11318 - Repasse Recebido Fundo de Previdência"
-            df.loc[mask_achou, "ClienteFornecedor_final"] = clientes.values
-            df.loc[mask_achou, "CentroCusto_final"] = centros.values
+        for cliente_oficial, texto_w4_norm in MAPEAMENTO_PREVIDENCIA_NORM:
+            mask = detalhe_norm.str.contains(texto_w4_norm, na=False)
+            if mask.any():
+                df.loc[mask, "Categoria_final"] = "11318 - Repasse Recebido Fundo de Previdência"
+                df.loc[mask, "ClienteFornecedor_final"] = cliente_oficial
+                df.loc[mask, "CentroCusto_final"] = extrair_centro_custo_do_cliente(cliente_oficial)
 
     # ============================
     # PROCESSO / EMPRÉSTIMOS
@@ -477,7 +383,7 @@ def converter_w4(df_w4, df_categorias_prep, setor, debug=False):
     data_tes = formatar_data_coluna(df["Data da Tesouraria"])
 
     # ============================
-    # MONTAGEM FINAL (ORDEM CORRETA)
+    # MONTAGEM FINAL
     # ============================
 
     out = pd.DataFrame()
@@ -500,16 +406,15 @@ def converter_w4(df_w4, df_categorias_prep, setor, debug=False):
     out["Cliente/Fornecedor"] = df.get("ClienteFornecedor_final", "")
     out["CNPJ/CPF Cliente/Fornecedor"] = ""
 
-    # Centro de custo:
     if str(setor).strip() == "Previdência Brasil":
-        centro_custo_out = df.get("CentroCusto_final", "")
+        out["Centro de Custo"] = df.get("CentroCusto_final", "")
     elif str(setor).strip() == "Sinodalidade" and "Lote" in df.columns:
         centro_custo_out = df["Lote"].fillna("").astype(str).str.strip()
         centro_custo_out = centro_custo_out.replace(["", "nan", "NaN"], "Adm Financeiro")
+        out["Centro de Custo"] = centro_custo_out
     else:
-        centro_custo_out = ""
+        out["Centro de Custo"] = ""
 
-    out["Centro de Custo"] = centro_custo_out
     out["Observações"] = ""
 
     return out
@@ -524,7 +429,6 @@ def carregar_arquivo_w4(arq):
         df = pd.read_excel(arq)
     else:
         df = pd.read_csv(arq, sep=";", encoding="latin1")
-    # tira espaços invisíveis das colunas
     df.columns = df.columns.astype(str).str.strip()
     return df
 
@@ -560,8 +464,6 @@ setor = st.selectbox(
     ]
 )
 
-debug = st.checkbox("DEBUG (mostrar detecção e matches)", value=False)
-
 arq_w4 = st.file_uploader(
     "Envie o arquivo W4 (CSV ou Excel)",
     type=["csv", "xlsx", "xls"]
@@ -571,7 +473,7 @@ if arq_w4:
     if st.button("Converter planilha"):
         try:
             df_w4 = carregar_arquivo_w4(arq_w4)
-            df_final = converter_w4(df_w4, df_cat_prep, setor, debug=debug)
+            df_final = converter_w4(df_w4, df_cat_prep, setor)
 
             st.success("Planilha convertida com sucesso!")
 
