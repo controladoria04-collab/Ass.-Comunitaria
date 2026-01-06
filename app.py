@@ -94,7 +94,7 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
         df[col_cat]
     )
 
-    # Inicializa colunas novas
+    # Inicializa colunas
     df["Cliente/Fornecedor"] = ""
     df["Centro de Custo"] = ""
 
@@ -116,16 +116,13 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
                     "Categoria_final"
                 ] = "11318 - Repasse Recebido Fundo de Previdência"
 
-                cliente = cliente_raw
-                centro = ""
+                # Cliente permanece inteiro
+                df.loc[mask, "Cliente/Fornecedor"] = cliente_raw
 
+                # Centro de custo recebe apenas o sufixo após "-"
                 if "-" in cliente_raw:
-                    partes = cliente_raw.split("-", 1)
-                    cliente = partes[0].strip()
-                    centro = partes[1].strip().upper()
-
-                df.loc[mask, "Cliente/Fornecedor"] = cliente
-                df.loc[mask, "Centro de Custo"] = centro
+                    centro = cliente_raw.split("-", 1)[1].strip().upper()
+                    df.loc[mask, "Centro de Custo"] = centro
 
     # ============================
     # PROCESSO / EMPRÉSTIMOS
