@@ -5,49 +5,39 @@ import unicodedata
 import re
 
 # ============================
-# CONFIG
+# CONFIG DO APP
 # ============================
-
 st.set_page_config(
-    page_title="Conversor W4",
+    page_title="Conversão Planilha Setores",
     layout="centered"
 )
-
-CENTROS_CUSTO_VALIDOS = {"DIACONIA", "FORTALEZA", "BRASIL", "EXTERIOR"}
 
 # ============================
 # FUNÇÕES AUXILIARES
 # ============================
-
-def clean_colname(name):
-    return str(name).replace("\u00A0", " ").strip()
-
-
-def make_unique_columns(cols):
-    counts = {}
-    out = []
-    for c in [clean_colname(c) for c in cols]:
-        counts[c] = counts.get(c, 0) + 1
-        out.append(c if counts[c] == 1 else f"{c}__{counts[c]}")
-    return out
-
-
-def col(df, name):
-    name = clean_colname(name)
-    if name not in df.columns:
-        raise ValueError(f"Coluna obrigatória não encontrada: {name}")
-    s = df[name]
-    return s.iloc[:, 0] if isinstance(s, pd.DataFrame) else s
-
-
 def normalize_text(texto):
     texto = str(texto).lower().strip()
-    texto = ''.join(
-        c for c in unicodedata.normalize('NFKD', texto)
+    texto = "".join(
+        c for c in unicodedata.normalize("NFKD", texto)
         if not unicodedata.combining(c)
     )
-    texto = re.sub(r'[^a-z0-9]+', ' ', texto)
-    return re.sub(r'\s+', ' ', texto).strip()
+    texto = re.sub(r"[^a-z0-9]+", " ", texto)
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def preparar_categorias(df_cat):
+    col = "Descrição da categoria financeira"
+    df = df_cat.copy()
+
+    def tirar_codigo(txt):
+        txt = str(txt).strip()
+        partes = txt.split(" ", 1)
+        if len(partes) == 2 and any(ch.isdigit() for ch in partes[0]):
+            return partes[1].strip()
+        return txt
+
+    df["nome_base"] = df[col].apply(tirar_codigo).apply(normalize_text)
+    return df
 
 
 def formatar_data_coluna(serie):
@@ -55,176 +45,269 @@ def formatar_data_coluna(serie):
     return datas.dt.strftime("%d/%m/%Y")
 
 
-def converter_valor(valor, is_despesa):
-    if pd.isna(valor):
+def converter_valor(valor_str, is_despesa):
+    if pd.isna(valor_str):
         return ""
-    base = f"{valor:.2f}".replace(".", ",") if isinstance(valor, (int, float)) else str(valor)
-    base = base.lstrip("+- ").strip()
-    return ("-" if is_despesa else "") + base
 
+    if isinstance(valor_str, (int, float)):
+        base = f"{valor_str:.2f}".replace(".", ",")
+    else:
+        base = str(valor_str).strip()
 
-def extrair_centro(cliente):
-    partes = [p.strip() for p in str(cliente).split(" - ")]
-    return partes[-1] if partes and partes[-1].upper() in CENTROS_CUSTO_VALIDOS else ""
-
-
-# ============================
-# CATEGORIAS
-# ============================
-
-def preparar_categorias(df):
-    col_desc = "Descrição da categoria financeira"
-
-    def tirar_codigo(txt):
-        p = str(txt).split(" ", 1)
-        return p[1] if len(p) == 2 and p[0].isdigit() else txt
-
-    df = df.copy()
-    df["nome_base"] = df[col_desc].apply(tirar_codigo).apply(normalize_text)
-    return df
+    base_sem_sinal = base.lstrip("+- ").strip()
+    return ("-" if is_despesa else "") + base_sem_sinal
 
 
 # ============================
-# MAPEAMENTO PREVIDÊNCIA
+# FUNÇÃO PRINCIPAL
 # ============================
+def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
+    if "Detalhe Conta / Objeto" not in df_w4.columns:
+        raise ValueError("Coluna 'Detalhe Conta / Objeto' não existe no W4.")
 
-def carregar_mapeamento(arq):
-    if arq is None:
-        raise ValueError("Envie o arquivo de mapeamento da Previdência")
+    col_cat = "Detalhe Conta / Objeto"
 
-    df = pd.read_excel(arq) if arq.name.endswith(("xlsx", "xls")) else pd.read_csv(arq, sep=";")
-    df.columns = make_unique_columns(df.columns)
+    # Remover transferências
+    df = df_w4.loc[
+        ~df_w4[col_cat].astype(str).str.contains(
+            "Transferência Entre Disponíveis",
+            case=False,
+            na=False
+        )
+    ].copy()
 
-    regras = []
-    for _, r in df.iterrows():
-        regras.append((
-            normalize_text(r["Padrao"]),
-            r["Cliente"],
-            extrair_centro(r["Cliente"])
-        ))
+    # ============================
+    # CATEGORIAS BASE
+    # ============================
+    col_desc_cat = "Descrição da categoria financeira"
+    df["nome_base_w4"] = df[col_cat].astype(str).apply(normalize_text)
 
-    regras.sort(key=lambda x: len(x[0]), reverse=True)
-    return regras
-
-
-# ============================
-# CONVERSÃO PRINCIPAL
-# ============================
-
-def converter_w4(df, df_cat, setor, regras_prev=None):
-
-    df = df.copy()
-    df.columns = make_unique_columns(df.columns)
-
-    detalhe = col(df, "Detalhe Conta / Objeto")
-    valor = col(df, "Valor total")
-    data = col(df, "Data da Tesouraria")
-    descricao = col(df, "Descrição")
-    item_id = col(df, "Id Item tesouraria")
-
-    df = df[~detalhe.astype(str).str.contains("Transferência Entre Disponíveis", case=False, na=False)]
-
-    df["nome_base_w4"] = detalhe.apply(normalize_text)
-    df = df.merge(df_cat[["nome_base", "Descrição da categoria financeira"]],
-                  left_on="nome_base_w4",
-                  right_on="nome_base",
-                  how="left")
-
-    df["Categoria_final"] = df["Descrição da categoria financeira"].fillna(detalhe)
-
-    fluxo = df.get("Fluxo", "").astype(str).str.lower()
-    processo = df.get("Processo", "").astype(str).str.lower()
-
-    df["is_despesa"] = (
-        fluxo.str.contains("despesa") |
-        processo.str.contains("pagamento") |
-        detalhe.str.lower().str.contains("despesa|custo")
+    df = df.merge(
+        df_categorias_prep[["nome_base", col_desc_cat]],
+        left_on="nome_base_w4",
+        right_on="nome_base",
+        how="left"
     )
 
-    df["Valor_final"] = [
-        converter_valor(v, d) for v, d in zip(valor, df["is_despesa"])
+    df["Categoria_final"] = df[col_desc_cat].where(
+        df[col_desc_cat].notna(),
+        df[col_cat]
+    )
+
+    # Inicializa colunas novas
+    df["Cliente/Fornecedor"] = ""
+    df["Centro de Custo"] = ""
+
+    # ============================
+    # PREVIDÊNCIA BRASIL — REPASSES
+    # ============================
+    if setor == "Previdência Brasil":
+        detalhe_norm = df[col_cat].astype(str).apply(normalize_text)
+
+        for _, row in df_map_prev.iterrows():
+            padrao = row["Padrao_norm"]
+            cliente_raw = row["Cliente"]
+
+            mask = detalhe_norm.str.contains(padrao, na=False)
+
+            if mask.any():
+                df.loc[
+                    mask,
+                    "Categoria_final"
+                ] = "11318 - Repasse Recebido Fundo de Previdência"
+
+                cliente = cliente_raw
+                centro = ""
+
+                if "-" in cliente_raw:
+                    partes = cliente_raw.split("-", 1)
+                    cliente = partes[0].strip()
+                    centro = partes[1].strip().upper()
+
+                df.loc[mask, "Cliente/Fornecedor"] = cliente
+                df.loc[mask, "Centro de Custo"] = centro
+
+    # ============================
+    # PROCESSO / EMPRÉSTIMOS
+    # ============================
+    fluxo = df.get("Fluxo", pd.Series("", index=df.index)).astype(str).str.lower()
+    fluxo_vazio = fluxo.str.strip().isin(["", "nan", "none"])
+
+    cond_fluxo_receita = fluxo.str.contains("receita", na=False)
+    cond_fluxo_despesa = fluxo.str.contains("despesa", na=False)
+    cond_imobilizado = fluxo.str.contains("imobilizado", na=False)
+
+    proc_original = df.get("Processo", pd.Series("", index=df.index)).astype(str)
+    proc = proc_original.str.lower()
+    proc = proc.apply(
+        lambda t: unicodedata.normalize("NFKD", t)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+
+    pessoa = df.get("Pessoa", pd.Series("", index=df.index)).astype(str)
+
+    cond_emprestimo = proc.str.contains("emprestimo", na=False)
+    cond_pag_emp = cond_emprestimo & proc.str.contains("pagamento", na=False)
+    cond_rec_emp = cond_emprestimo & proc.str.contains("recebimento", na=False)
+
+    df.loc[cond_pag_emp, "Categoria_final"] = (
+        proc_original[cond_pag_emp] + " " + pessoa[cond_pag_emp]
+    )
+
+    df.loc[cond_rec_emp, "Categoria_final"] = (
+        proc_original[cond_rec_emp] + " " + pessoa[cond_rec_emp]
+    )
+
+    df.loc[
+        cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp,
+        "Categoria_final"
+    ] = (
+        proc_original[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp]
+        + " "
+        + pessoa[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp]
+    )
+
+    # ============================
+    # CLASSIFICAÇÃO DESPESA / RECEITA
+    # ============================
+    detalhe_lower = df[col_cat].astype(str).str.lower()
+
+    cond_palavra_despesa = (
+        fluxo_vazio
+        & (
+            detalhe_lower.str.contains("custo", na=False)
+            | detalhe_lower.str.contains("despesa", na=False)
+        )
+    )
+
+    cond_pag_proc = fluxo_vazio & proc.str.contains("pagamento", na=False)
+    cond_rec_proc = fluxo_vazio & proc.str.contains("recebimento", na=False)
+
+    df["is_despesa"] = (
+        cond_fluxo_despesa
+        | cond_imobilizado
+        | cond_palavra_despesa
+        | cond_pag_proc
+    )
+
+    df.loc[cond_fluxo_receita | cond_rec_proc, "is_despesa"] = False
+
+    # ============================
+    # VALORES
+    # ============================
+    df["Valor_str_final"] = [
+        converter_valor(v, d)
+        for v, d in zip(df["Valor total"], df["is_despesa"])
     ]
 
-    df["ClienteFornecedor"] = ""
-    df["CentroCusto"] = ""
+    # ============================
+    # DATAS
+    # ============================
+    data_tes = formatar_data_coluna(df["Data da Tesouraria"])
 
-    if setor == "Previdência Brasil":
-        detalhe_norm = detalhe.apply(normalize_text)
+    # ============================
+    # CENTRO DE CUSTO — SINODALIDADE
+    # ============================
+    if setor == "Sinodalidade" and "Lote" in df.columns:
+        centro_padrao = (
+            df["Lote"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .replace(["", "nan", "NaN"], "Adm Financeiro")
+        )
+    else:
+        centro_padrao = ""
 
-        def match(txt):
-            for padrao, cliente, centro in regras_prev:
-                if padrao in txt:
-                    return cliente, centro
-            return "", ""
+    # ============================
+    # MONTAGEM FINAL
+    # ============================
+    out = pd.DataFrame()
+    out["Data de Competência"] = data_tes
+    out["Data de Vencimento"] = data_tes
+    out["Data de Pagamento"] = data_tes
+    out["Valor"] = df["Valor_str_final"]
+    out["Categoria"] = df["Categoria_final"]
 
-        res = detalhe_norm.apply(match)
-        df["ClienteFornecedor"] = res.apply(lambda x: x[0])
-        df["CentroCusto"] = res.apply(lambda x: x[1])
+    if "Id Item tesouraria" in df.columns:
+        out["Descrição"] = (
+            df["Id Item tesouraria"].astype(str)
+            + " "
+            + df["Descrição"].astype(str)
+        )
+    else:
+        out["Descrição"] = df["Descrição"]
 
-        mask = df["ClienteFornecedor"] != ""
-        df.loc[mask, "Categoria_final"] = "11318 - Repasse Recebido Fundo de Previdência"
-
-    datas = formatar_data_coluna(data)
-
-    out = pd.DataFrame({
-        "Data de Competência": datas,
-        "Data de Vencimento": datas,
-        "Data de Pagamento": datas,
-        "Valor": df["Valor_final"],
-        "Categoria": df["Categoria_final"],
-        "Descrição": item_id.astype(str) + " " + descricao.astype(str),
-        "Cliente/Fornecedor": df["ClienteFornecedor"],
-        "CNPJ/CPF Cliente/Fornecedor": "",
-        "Centro de Custo": df["CentroCusto"],
-        "Observações": ""
-    })
+    out["Cliente/Fornecedor"] = df["Cliente/Fornecedor"]
+    out["CNPJ/CPF Cliente/Fornecedor"] = ""
+    out["Centro de Custo"] = df["Centro de Custo"].replace("", centro_padrao)
+    out["Observações"] = ""
 
     return out
 
 
 # ============================
+# CARREGAR ARQUIVO W4
+# ============================
+def carregar_arquivo_w4(arq):
+    if arq.name.lower().endswith((".xlsx", ".xls")):
+        return pd.read_excel(arq)
+    return pd.read_csv(arq, sep=";", encoding="latin1")
+
+
+# ============================
+# CARREGAR CATEGORIAS
+# ============================
+df_cat_raw = pd.read_excel("categorias_contabeis.xlsx")
+df_cat_prep = preparar_categorias(df_cat_raw)
+
+# ============================
+# CARREGAR MAPEAMENTO PREVIDÊNCIA
+# ============================
+df_map_prev = pd.read_excel("mapeamento_previdencia.xlsx")
+df_map_prev["Padrao_norm"] = df_map_prev["Padrao"].apply(normalize_text)
+
+# ============================
 # INTERFACE
 # ============================
-
-st.title("Conversor W4")
+st.title("Conversão Planilha Setores")
 
 setor = st.selectbox(
     "Selecione o setor",
     ["Ass. Comunitária", "Sinodalidade", "Previdência Brasil"]
 )
 
-arq_map = None
-if setor == "Previdência Brasil":
-    arq_map = st.file_uploader("Upload do mapeamento (Cliente / Padrao)", type=["xlsx", "xls", "csv"])
-
-arq_w4 = st.file_uploader("Upload do arquivo W4", type=["xlsx", "xls", "csv"])
+arq_w4 = st.file_uploader(
+    "Envie o arquivo W4 (CSV ou Excel)",
+    type=["csv", "xlsx", "xls"]
+)
 
 if arq_w4:
-    if st.button("Converter"):
+    if st.button("Converter planilha"):
         try:
-            df_w4 = pd.read_excel(arq_w4) if arq_w4.name.endswith(("xlsx", "xls")) else pd.read_csv(arq_w4, sep=";")
-            df_w4.columns = make_unique_columns(df_w4.columns)
+            df_w4 = carregar_arquivo_w4(arq_w4)
+            df_final = converter_w4(
+                df_w4,
+                df_cat_prep,
+                setor,
+                df_map_prev
+            )
 
-            df_cat = pd.read_excel("categorias_contabeis.xlsx")
-            df_cat.columns = make_unique_columns(df_cat.columns)
-            df_cat_prep = preparar_categorias(df_cat)
-
-            regras = carregar_mapeamento(arq_map) if setor == "Previdência Brasil" else None
-
-            df_final = converter_w4(df_w4, df_cat_prep, setor, regras)
+            st.success("Planilha convertida com sucesso!")
 
             buffer = BytesIO()
-            df_final.to_excel(buffer, index=False)
+            df_final.to_excel(buffer, index=False, engine="openpyxl")
             buffer.seek(0)
 
             st.download_button(
-                "Baixar arquivo convertido",
-                buffer,
-                "conta_azul_convertido.xlsx",
+                label="Baixar planilha convertida",
+                data=buffer,
+                file_name="planilha_convertida_setor.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            st.success("Conversão concluída!")
-
         except Exception as e:
             st.error(f"Erro: {e}")
+else:
+    st.info("Selecione um setor e envie o arquivo W4.")
