@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from io import BytesIO
 import unicodedata
 import re
@@ -67,6 +68,7 @@ def converter_valor(valor_str, is_despesa):
 CENTROS_CUSTO_VALIDOS = {"FORTALEZA", "DIACONIA", "EXTERIOR", "BRASIL"}
 
 MAPEAMENTO_PREVIDENCIA = [
+    # (cliente_oficial, texto_w4)
     ("APARECIDA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aparecida"),
     ("ARACAJU - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aracaju"),
     ("ARACATI - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aracati"),
@@ -161,7 +163,7 @@ MAPEAMENTO_PREVIDENCIA = [
     ("PH - PROJETO MARIA MADALENA - FORTALEZA", "Repasse Recebido Fundo de Previdência Projeto Maria Madalena"),
     ("PH - SECRETARIA - FORTALEZA", "Repasse Recebido Fundo de Previdência Secretaria de PH Fortaleza"),
 
-    # ---- NOVOS QUE VOCÊ PEDIU ----
+    # novos
     ("PIRACICABA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Piracicaba"),
     ("PONTA GROSSA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Ponta Grossa"),
     ("PREFEITURA - DIACONIA", "Repasse Recebido Fundo de Previdência Prefeitura"),
@@ -203,14 +205,25 @@ MAPEAMENTO_PREVIDENCIA = [
     ("VITÓRIA DA CONQUISTA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Vitória da Conquista - Difusão"),
 ]
 
-# Pré-normalizado + centro de custo calculado
-MAPEAMENTO_PREVIDENCIA_PREP = []
+# Pré-processamento do mapeamento (normaliza o texto do W4 e extrai centro do cliente)
+MAPEAMENTO_PREP = []
 for cliente, texto_w4 in MAPEAMENTO_PREVIDENCIA:
-    cliente_str = str(cliente).strip()
+    cliente = str(cliente).strip()
     texto_norm = normalize_text(texto_w4)
-    partes = [p.strip() for p in cliente_str.split(" - ")]
+    partes = [p.strip() for p in cliente.split(" - ")]
     centro = partes[-1].upper() if partes and partes[-1].upper() in CENTROS_CUSTO_VALIDOS else ""
-    MAPEAMENTO_PREVIDENCIA_PREP.append((texto_norm, cliente_str, centro))
+    MAPEAMENTO_PREP.append((texto_norm, cliente, centro))
+
+
+def buscar_cliente_previdencia(txt_norm: str):
+    """
+    Retorna (cliente, centro) do primeiro padrão que casar.
+    """
+    for padrao_norm, cliente, centro in MAPEAMENTO_PREP:
+        if padrao_norm and padrao_norm in txt_norm:
+            return cliente, centro
+    return "", ""
+
 
 # ============================
 # FUNÇÃO PRINCIPAL
@@ -222,17 +235,13 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     df_w4.columns = df_w4.columns.astype(str).str.strip()
 
     if "Detalhe Conta / Objeto" not in df_w4.columns:
-        raise ValueError(
-            f"Coluna 'Detalhe Conta / Objeto' não existe no W4. Colunas: {list(df_w4.columns)}"
-        )
+        raise ValueError(f"Coluna 'Detalhe Conta / Objeto' não existe no W4. Colunas: {list(df_w4.columns)}")
 
     col_cat = "Detalhe Conta / Objeto"
 
     # Remover transferências
     df = df_w4.loc[
-        ~df_w4[col_cat].astype(str).str.contains(
-            "Transferência Entre Disponíveis", case=False, na=False
-        )
+        ~df_w4[col_cat].astype(str).str.contains("Transferência Entre Disponíveis", case=False, na=False)
     ].copy()
 
     # ============================
@@ -249,13 +258,10 @@ def converter_w4(df_w4, df_categorias_prep, setor):
         how="left"
     )
 
-    df["Categoria_final"] = df[col_desc_cat].where(
-        df[col_desc_cat].notna(),
-        df[col_cat]
-    )
+    df["Categoria_final"] = df[col_desc_cat].where(df[col_desc_cat].notna(), df[col_cat])
 
     # ============================
-    # PREVIDÊNCIA (sem erro de assign): mapeamento por linha
+    # PREVIDÊNCIA: aplicar mapeamento (sem .loc com iteráveis)
     # ============================
 
     df["ClienteFornecedor_final"] = ""
@@ -264,22 +270,19 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     if str(setor).strip() == "Previdência Brasil":
         detalhe_norm = df[col_cat].astype(str).apply(normalize_text)
 
-        def buscar_mapeamento(txt_norm: str):
-            for padrao_norm, cliente, centro in MAPEAMENTO_PREVIDENCIA_PREP:
-                if padrao_norm and padrao_norm in txt_norm:
-                    return cliente, centro
-            return "", ""
+        pares = detalhe_norm.apply(buscar_cliente_previdencia)
+        df["ClienteFornecedor_final"] = pares.apply(lambda x: x[0])
+        df["CentroCusto_final"] = pares.apply(lambda x: x[1])
 
-        resultados = detalhe_norm.apply(buscar_mapeamento)
-        df["ClienteFornecedor_final"] = resultados.apply(lambda x: x[0])
-        df["CentroCusto_final"] = resultados.apply(lambda x: x[1])
-
-        # Só troca categoria onde encontrou cliente
         achou = df["ClienteFornecedor_final"].ne("")
-        df.loc[achou, "Categoria_final"] = "11318 - Repasse Recebido Fundo de Previdência"
+        df["Categoria_final"] = np.where(
+            achou.to_numpy(),
+            "11318 - Repasse Recebido Fundo de Previdência",
+            df["Categoria_final"].astype(str).to_numpy()
+        )
 
     # ============================
-    # PROCESSO / EMPRÉSTIMOS
+    # PROCESSO / EMPRÉSTIMOS (regras sem loc “perigoso”)
     # ============================
 
     fluxo = df.get("Fluxo", pd.Series("", index=df.index)).astype(str).str.lower()
@@ -290,35 +293,27 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     cond_imobilizado = fluxo.str.contains("imobilizado", na=False)
 
     proc_original = df.get("Processo", pd.Series("", index=df.index)).astype(str)
-    proc = proc_original.str.lower()
-    proc = proc.apply(
-        lambda t: unicodedata.normalize("NFKD", t)
-        .encode("ascii", "ignore")
-        .decode("ascii")
+    proc = proc_original.str.lower().apply(
+        lambda t: unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode("ascii")
     )
 
     pessoa = df.get("Pessoa", pd.Series("", index=df.index)).astype(str)
 
     cond_emprestimo = proc.str.contains("emprestimo", na=False)
-    cond_pag_emp = cond_emprestimo & proc.str.contains("pagamento", na=False)
-    cond_rec_emp = cond_emprestimo & proc.str.contains("recebimento", na=False)
+    cond_pag_emp = (cond_emprestimo & proc.str.contains("pagamento", na=False)).to_numpy()
+    cond_rec_emp = (cond_emprestimo & proc.str.contains("recebimento", na=False)).to_numpy()
+    cond_outros_emp = (cond_emprestimo & ~(cond_emprestimo & proc.str.contains("pagamento", na=False)) &
+                       ~(cond_emprestimo & proc.str.contains("recebimento", na=False))).to_numpy()
 
-    df.loc[cond_pag_emp, "Categoria_final"] = (
-        proc_original[cond_pag_emp] + " " + pessoa[cond_pag_emp]
-    )
+    cat_arr = df["Categoria_final"].astype(str).to_numpy()
+    proc_arr = proc_original.astype(str).to_numpy()
+    pess_arr = pessoa.astype(str).to_numpy()
 
-    df.loc[cond_rec_emp, "Categoria_final"] = (
-        proc_original[cond_rec_emp] + " " + pessoa[cond_rec_emp]
-    )
+    cat_arr = np.where(cond_pag_emp, proc_arr + " " + pess_arr, cat_arr)
+    cat_arr = np.where(cond_rec_emp, proc_arr + " " + pess_arr, cat_arr)
+    cat_arr = np.where(cond_outros_emp, proc_arr + " " + pess_arr, cat_arr)
 
-    df.loc[
-        cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp,
-        "Categoria_final"
-    ] = (
-        proc_original[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp]
-        + " "
-        + pessoa[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp]
-    )
+    df["Categoria_final"] = cat_arr
 
     # ============================
     # CLASSIFICAÇÃO DESPESA / RECEITA
@@ -337,17 +332,16 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     cond_pag_proc = fluxo_vazio & proc.str.contains("pagamento", na=False)
     cond_rec_proc = fluxo_vazio & proc.str.contains("recebimento", na=False)
 
-    df["is_despesa"] = (
+    is_despesa = (
         cond_fluxo_despesa |
         cond_imobilizado |
         cond_palavra_despesa |
         cond_pag_proc
-    )
+    ).to_numpy()
 
-    df.loc[
-        cond_fluxo_receita | cond_rec_proc,
-        "is_despesa"
-    ] = False
+    # Receita força False
+    is_despesa = np.where((cond_fluxo_receita | cond_rec_proc).to_numpy(), False, is_despesa)
+    df["is_despesa"] = is_despesa
 
     # ============================
     # VALORES
@@ -357,8 +351,7 @@ def converter_w4(df_w4, df_categorias_prep, setor):
         raise ValueError("Coluna 'Valor total' não existe no W4.")
 
     df["Valor_str_final"] = [
-        converter_valor(v, d)
-        for v, d in zip(df["Valor total"], df["is_despesa"])
+        converter_valor(v, d) for v, d in zip(df["Valor total"], df["is_despesa"])
     ]
 
     # ============================
@@ -374,6 +367,9 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     # MONTAGEM FINAL
     # ============================
 
+    if "Descrição" not in df.columns:
+        df["Descrição"] = ""
+
     out = pd.DataFrame()
     out["Data de Competência"] = data_tes
     out["Data de Vencimento"] = data_tes
@@ -381,25 +377,20 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     out["Valor"] = df["Valor_str_final"]
     out["Categoria"] = df["Categoria_final"]
 
-    if "Descrição" not in df.columns:
-        df["Descrição"] = ""
-
     if "Id Item tesouraria" in df.columns:
-        out["Descrição"] = (
-            df["Id Item tesouraria"].astype(str) + " " + df["Descrição"].astype(str)
-        )
+        out["Descrição"] = df["Id Item tesouraria"].astype(str) + " " + df["Descrição"].astype(str)
     else:
         out["Descrição"] = df["Descrição"].astype(str)
 
-    out["Cliente/Fornecedor"] = df.get("ClienteFornecedor_final", "")
+    out["Cliente/Fornecedor"] = df["ClienteFornecedor_final"]
     out["CNPJ/CPF Cliente/Fornecedor"] = ""
 
     if str(setor).strip() == "Previdência Brasil":
-        out["Centro de Custo"] = df.get("CentroCusto_final", "")
+        out["Centro de Custo"] = df["CentroCusto_final"]
     elif str(setor).strip() == "Sinodalidade" and "Lote" in df.columns:
-        centro_custo_out = df["Lote"].fillna("").astype(str).str.strip()
-        centro_custo_out = centro_custo_out.replace(["", "nan", "NaN"], "Adm Financeiro")
-        out["Centro de Custo"] = centro_custo_out
+        centro = df["Lote"].fillna("").astype(str).str.strip()
+        centro = centro.replace(["", "nan", "NaN"], "Adm Financeiro")
+        out["Centro de Custo"] = centro
     else:
         out["Centro de Custo"] = ""
 
@@ -445,11 +436,7 @@ st.title("Conversão Planilha Setores")
 
 setor = st.selectbox(
     "Selecione o setor",
-    [
-        "Ass. Comunitária",
-        "Sinodalidade",
-        "Previdência Brasil"
-    ]
+    ["Ass. Comunitária", "Sinodalidade", "Previdência Brasil"]
 )
 
 arq_w4 = st.file_uploader(
