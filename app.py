@@ -9,23 +9,52 @@ import re
 # CONFIG DO APP
 # ============================
 
-st.set_page_config(
-    page_title="Conversão Planilha Setores",
-    layout="centered"
-)
+st.set_page_config(page_title="Conversão Planilha Setores", layout="centered")
 
 # ============================
 # FUNÇÕES AUXILIARES
 # ============================
 
+CENTROS_CUSTO_VALIDOS = {"FORTALEZA", "DIACONIA", "EXTERIOR", "BRASIL"}
+
+
 def normalize_text(texto):
     texto = str(texto).lower().strip()
-    texto = ''.join(
-        c for c in unicodedata.normalize('NFKD', texto)
+    texto = "".join(
+        c for c in unicodedata.normalize("NFKD", texto)
         if not unicodedata.combining(c)
     )
-    texto = re.sub(r'[^a-z0-9]+', ' ', texto)
-    return re.sub(r'\s+', ' ', texto).strip()
+    texto = re.sub(r"[^a-z0-9]+", " ", texto)
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def make_unique_columns(cols):
+    """
+    - strip
+    - remove NBSP
+    - torna nomes únicos: Col, Col__2, Col__3...
+    """
+    cleaned = []
+    for c in cols:
+        c = str(c).replace("\u00A0", " ").strip()
+        cleaned.append(c)
+
+    counts = {}
+    out = []
+    for c in cleaned:
+        counts[c] = counts.get(c, 0) + 1
+        if counts[c] == 1:
+            out.append(c)
+        else:
+            out.append(f"{c}__{counts[c]}")
+    return out
+
+
+def extrair_centro(cliente):
+    partes = [p.strip() for p in str(cliente).split(" - ")]
+    if partes and partes[-1].upper() in CENTROS_CUSTO_VALIDOS:
+        return partes[-1].upper()
+    return ""
 
 
 def preparar_categorias(df_cat):
@@ -62,180 +91,72 @@ def converter_valor(valor_str, is_despesa):
 
 
 # ============================
-# PREVIDÊNCIA: MAPEAMENTO DIRETO
+# LEITURA DE ARQUIVOS
 # ============================
 
-CENTROS_CUSTO_VALIDOS = {"FORTALEZA", "DIACONIA", "EXTERIOR", "BRASIL"}
+def carregar_arquivo_w4(arq):
+    if arq.name.lower().endswith((".xlsx", ".xls")):
+        df = pd.read_excel(arq)
+    else:
+        df = pd.read_csv(arq, sep=";", encoding="latin1")
 
-MAPEAMENTO_PREVIDENCIA = [
-    # (cliente_oficial, texto_w4)
-    ("APARECIDA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aparecida"),
-    ("ARACAJU - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aracaju"),
-    ("ARACATI - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aracati"),
-    ("ARAPIRACA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Arapiraca"),
-    ("ARARAQUARA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Araraquara"),
-    ("ASSESSORIA DE DIFUSÃO DA OBRA - DIACONIA", "Repasse Recebido Fundo de Previdência Difusão da Obra"),
-    ("ASSESSORIA DE PROMOÇÃO HUMANA - DIACONIA", "Repasse Recebido Fundo de Previdência Assessoria de Promoção Humana"),
-    ("ASSESSORIA JOVEM - DIACONIA", "Repasse Recebido Fundo de Previdência Assessoria Jovem"),
-    ("ASSESSORIA LITURGICO - SACRAMENTAL - DIACONIA", "Repasse Recebido Fundo de Previdência Litúrgico Sacramental"),
-    ("ASSESSORIA VOCACIONAL - DIACONIA", "Repasse Recebido Fundo de Previdência Assessoria Vocacional"),
-    ("ASSISTÊNCIA APOSTÓLICA - DIACONIA", "Repasse Recebido Fundo de Previdência Assistência Apostólica"),
-    ("ASSISTÊNCIA COMUNITÁRIA - DIACONIA", "Repasse Recebido Fundo de Previdência Assessoria Comunitária"),
-    ("ASSISTÊNCIA DE COMUNICAÇÃO - DIACONIA", "Repasse Recebido Fundo de Previdência Assistencia de Comunicação"),
-    ("ASSISTÊNCIA DE FORMAÇÃO - DIACONIA", "Repasse Recebido Fundo de Previdência Assistência de Formação"),
-    ("ASSISTÊNCIA LOCAL - FORTALEZA", "Repasse Recebido Fundo de Previdência Assistência Local"),
-    ("ASSISTÊNCIA MISSIONÁRIA - DIACONIA", "Repasse Recebido Fundo de Previdência Assistência Missionária"),
-    ("BEJAIA - EXTERIOR", "Repasse Recebido Fundo de Previdência Bejaia"),
-    ("BELÉM - BRASIL", "Repasse Recebido Fundo de Previdência Missão Belém"),
-    ("BELO HORIZONTE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Belo Horizonte"),
-    ("BOGOTÁ - EXTERIOR", "Repasse Recebido Fundo de Previdência Bogotá"),
-    ("BOSTON - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Boston"),
-    ("BRASÍLIA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Brasília"),
-    ("CABO VERDE - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Cabo Verde"),
-    ("CAMPINA GRANDE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Campina Grande"),
-    ("CAMPO GRANDE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Campo Grande"),
-    ("CASA DE RETIRO - DIACONIA", "Repasse Recebido Fundo de Previdência Casa de Retiro São João Paulo II"),
-    ("CEST - CASA CONTEMPLATIVA - BRASIL", "Repasse Recebido Fundo de Previdência Casa Contemplativa"),
-    ("CEST - FORTALEZA", "Repasse Recebido Fundo de Previdência CEST Fortaleza"),
-    ("CEV - AQUIRAZ - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Aquiraz"),
-    ("CEV - CARMO - FORTALEZA", "Repasse Recebido Livraria CEV Nossa Sra do Carmo"),
-    ("CEV - SHALOM CID. DOS FUNCIONÁRIOS - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Cidade dos Funcionários"),
-    ("CEV - SHALOM CRISTO REDENTOR - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Cristo Redentor"),
-    ("CEV - SHALOM FÁTIMA - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Fátima"),
-    ("CEV - SHALOM PARANGABA - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Parangaba"),
-    ("CEV - SHALOM PARQUELÂNDIA - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Parquelandia"),
-    ("CEV - SHALOM PAZ - FORTALEZA", "Repasse Recebido Fundo de Previdência CEV Shalom da Paz"),
-    ("CHAVES - BRASIL", "Repasse Recebido Fundo de Previdência Missão Chaves"),
-    ("COLÉGIO SHALOM - FORTALEZA", "Repasse Recebido Fundo de Previdência Colégio Shalom"),
-    ("COORDENAÇÃO APOSTÓLICA - FORTALEZA", "Repasse Recebido Fundo de Previdência Coordenação Apostólica"),
-    ("CRATEÚS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Crateús"),
-    ("CRISMA - FORTALEZA", "Repasse Recebido Fundo de Previdência Crisma"),
-    ("CRUZEIRO DO SUL - BRASIL", "Repasse Recebido Fundo de Previdência Missão Cruzeiro do Sul"),
-    ("CUIABÁ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Cuiabá"),
-    ("CURITIBA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Curitiba"),
-    ("DISCIPULADO EUSÉBIO - FORTALEZA", "Repasse Recebido Fundo de Previdência Discipulado Eusébio"),
-    ("DISCIPULADO PACAJUS - FORTALEZA", "Repasse Recebido Fundo de Previdência Discipulado Pacajus"),
-    ("DISCIPULADO QUIXADÁ - FORTALEZA", "Repasse Recebido Fundo de Previdência Discipulado Quixadá"),
-    ("ECONOMATO GERAL - DIACONIA", "Repasse Recebido Fundo de Previdência Economato Diaconia"),
-    ("EDIÇÕES - DIACONIA", "Repasse Recebido Fundo de Previdência Edições Shalom"),
-    ("ESCOLA DE EVANGELIZAÇÃO - FORTALEZA", "Repasse Recebido Fundo de Previdência Escola de Evangelização"),
-    ("ESCRITÓRIO GERAL - DIACONIA", "Repasse Recebido Fundo de Previdência Escritório Geral"),
-    ("ESC. SECRETÁRIA COMUNITÁRIA - FORTALEZA", "Repasse Recebido Fundo de Previdência Secretaria Comunitária Fortaleza"),
-    ("FLORIANÓPOLIS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Florianópolis"),
-    ("GARANHUNS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Garanhuns"),
-    ("GOIÂNIA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Goiânia"),
-    ("GUARULHOS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Guarulhos"),
-    ("GUIANA FRANCESA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Guiana Francesa"),
-    ("HAIFA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Haifa"),
-    ("IGREJA - DIACONIA", "Repasse Recebido Fundo de Previdência Igreja do Ressuscitado"),
-    ("IMPERATRIZ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Imperatriz"),
-    ("ITAPIPOCA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Itapipoca"),
-    ("JOÃO PESSOA - BRASIL", "Repasse Recebido Fundo de Previdência Missão João Pessoa"),
-    ("JOINVILLE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Joinville"),
-    ("JUAZEIRO DA BAHIA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Juazeiro da Bahia"),
-    ("JUAZEIRO DO NORTE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Juazeiro do Norte"),
-    ("JUIZ DE FORA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Juiz de Fora"),
-    ("LANÇAI AS REDES - DIACONIA", "Repasse Recebido Fundo de Previdência Lançai as Redes"),
-    ("LANCHONETE PARQUELÂNDIA - FORTALEZA", "Repasse Recebido Fundo de Previdência Lanchonete Parquelandia"),
-    ("LANCHONETE - SHALOM DA PAZ - FORTALEZA", "Repasse Recebido Fundo de Previdência Lanchonete Shalom da Paz"),
-    ("LIMA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Lima"),
-    ("LIVRARIA - PARANGABA - FORTALEZA", "Repasse Recebido Fundo de Previdência Livraria Parangaba"),
-    ("LUBANGO - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Lubango"),
-    ("MACAPÁ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Macapá"),
-    ("MACEIÓ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Maceió"),
-    ("MADAGASCAR - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Madagascar"),
-    ("MANAUS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Manaus"),
-    ("MANILA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Manila"),
-    ("MATRIZ - FORTALEZA", "Repasse Recebido Fundo de Previdência Matriz"),
-    ("MOÇAMBIQUE - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Moçambique"),
-    ("MOSSORÓ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Mossoró"),
-    ("NATAL - BRASIL", "Repasse Recebido Fundo de Previdência Missão Natal"),
-    ("NAZARETH - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Nazareth"),
-    ("NITERÓI - BRASIL", "Repasse Recebido Fundo de Previdência Missão Niterói"),
-    ("PALMAS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Palmas"),
-    ("PARNAÍBA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Parnaíba"),
-    ("PARRESIA - DIACONIA", "Repasse Recebido Fundo de Previdência Instituto Parresia"),
-    ("PATOS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Patos"),
-    ("PATOS DE MINAS - BRASIL", "Repasse Recebido Fundo de Previdência Missão Patos de Minas"),
-    ("PH - CASA RENATA COURAS - FORTALEZA", "Repasse Recebido Fundo de Previdência Casa Renata Couras"),
-    ("PH - CASA RONALDO PEREIRA - FORTALEZA", "Repasse Recebido Fundo de Previdência Casa Ronaldo Pereira"),
-    ("PH - PROJETO AMIGO DOS POBRES - FORTALEZA", "Repasse Recebido Fundo de Previdência Projeto Amigo dos Pobres"),
-    ("PH - PROJETO MARIA MADALENA - FORTALEZA", "Repasse Recebido Fundo de Previdência Projeto Maria Madalena"),
-    ("PH - SECRETARIA - FORTALEZA", "Repasse Recebido Fundo de Previdência Secretaria de PH Fortaleza"),
-
-    # novos
-    ("PIRACICABA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Piracicaba"),
-    ("PONTA GROSSA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Ponta Grossa"),
-    ("PREFEITURA - DIACONIA", "Repasse Recebido Fundo de Previdência Prefeitura"),
-    ("PROJETO ARTES - FORTALEZA", "Repasse Recebido Fundo de Previdência Projeto Artes"),
-    ("PROJETO JUVENTUDE - FORTALEZA", "Repasse Recebido Fundo de Previdência Projeto Juventude Fortaleza"),
-    ("QUIXADÁ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Quixadá"),
-    ("RÁDIO SHALOM - FORTALEZA", "Repasse Recebido Fundo de Previdência Rádio Shalom AM 690"),
-    ("RECIFE - BRASIL", "Repasse Recebido Fundo de Previdência Missão Recife"),
-    ("REG - CID. DOS FUNCIONÁRIOS - FORTALEZA", "Repasse Recebido Fundo de Previdência Regional Shalom Cidade dos Funcionários"),
-    ("REG.  PACAJUS - FORTALEZA", "Repasse Recebido Fundo de Previdência Pacajus"),
-    ("REG - PARANGABA - FORTALEZA", "Repasse Recebido Fundo de Previdência Regional Shalom Parangaba"),
-    ("REG - PARQUELÂNDIA - FORTALEZA", "Repasse Recebido Fundo de Previdência Regional Shalom Parquelandia"),
-    ("RIO DE JANEIRO - BRASIL", "Repasse Recebido Fundo de Previdência Missão Rio de Janeiro"),
-    ("ROMA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Roma"),
-    ("SALVADOR - BRASIL", "Repasse Recebido Fundo de Previdência Missão Salvador"),
-    ("SANTA CRUZ DE LA SIERRA - EXTERIOR", "Repasse Recebido Fundo de Previdência Santa Cruz de La Sierra"),
-    ("SANTO AMARO - BRASIL", "Repasse Recebido Fundo de Previdência Missão Santo Amaro"),
-    ("SANTO ANDRÉ - BRASIL", "Repasse Recebido Fundo de Previdência Missão Santo André"),
-    ("SÃO LEOPOLDO - BRASIL", "Repasse Recebido Fundo de Previdência Missão São Leopoldo"),
-    ("SÃO LUÍS - BRASIL", "Repasse Recebido Fundo de Previdência Missão São Luis"),
-    ("SÃO PAULO - PERDIZES - BRASIL", "Repasse Recebido Fundo de Previdência Missão São Paulo"),
-    ("SÃO PAULO - TÁIPAS - BRASIL", "Repasse Recebido Fundo de Previdência Missão São Paulo"),
-    ("SEC. DE COMUNICAÇÃO - FORTALEZA", "Repasse Recebido Fundo de Previdência Secretaria de Comunicação"),
-    ("SEC. DE SACERDOTES E SEMINARISTAS - DIACONIA", "Repasse Recebido Fundo de Previdência Sacerdotes e Seminaristas"),
-    ("SECRETARIA DE PLANEJAMENTO - DIACONIA", "Repasse Recebido Fundo de Previdência Secretaria de Planejamento"),
-    ("SECRETARIA VOCACIONAL - FORTALEZA", "Repasse Recebido Fundo de Previdência Secretaria Vocacional Fortaleza"),
-    ("SENHOR DO BONFIM - BRASIL", "Repasse Recebido Fundo de Previdência Missão Senhor do Bonfim"),
-    ("SETOR COLEGIADO - DIACONIA", "Repasse Recebido Fundo de Previdência Setor Colegiado"),
-    ("SETOR DE EVENTOS - FORTALEZA", "Repasse Recebido Fundo de Previdência Setor de Eventos Fortaleza"),
-    ("SETOR DOS CELIBATÁRIOS - DIACONIA", "Repasse Recebido Fundo de Previdência Setor Celibatários"),
-    ("SETOR FAMÍLLIA - DIACONIA", "Repasse Recebido Fundo de Previdência Setor Familias"),
-    ("SOBRAL - BRASIL", "Repasse Recebido Fundo de Previdência Missão Sobral"),
-    ("TAIWAN - EXTERIOR", "Repasse Recebido Fundo de Previdência Taiwan"),
-    ("TECNOLOGIA DA INFORMAÇÃO - DIACONIA", "Repasse Recebido Tecnologia da Informação"),
-    ("TERESINA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Teresina"),
-    ("TUNÍSIA - EXTERIOR", "Repasse Recebido Fundo de Previdência Missão Tunísia"),
-    ("UBERABA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Uberaba"),
-    ("VITÓRIA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Vitória ES"),
-    ("VITÓRIA DA CONQUISTA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Vitória da Conquista - Difusão"),
-]
-
-# Pré-processamento do mapeamento (normaliza o texto do W4 e extrai centro do cliente)
-MAPEAMENTO_PREP = []
-for cliente, texto_w4 in MAPEAMENTO_PREVIDENCIA:
-    cliente = str(cliente).strip()
-    texto_norm = normalize_text(texto_w4)
-    partes = [p.strip() for p in cliente.split(" - ")]
-    centro = partes[-1].upper() if partes and partes[-1].upper() in CENTROS_CUSTO_VALIDOS else ""
-    MAPEAMENTO_PREP.append((texto_norm, cliente, centro))
+    df.columns = make_unique_columns(df.columns)
+    return df
 
 
-def buscar_cliente_previdencia(txt_norm: str):
+def carregar_mapeamento_upload(arq_map):
     """
-    Retorna (cliente, centro) do primeiro padrão que casar.
+    Arquivo Excel/CSV com colunas:
+      - Cliente
+      - Padrao
     """
-    for padrao_norm, cliente, centro in MAPEAMENTO_PREP:
-        if padrao_norm and padrao_norm in txt_norm:
-            return cliente, centro
-    return "", ""
+    if arq_map.name.lower().endswith((".xlsx", ".xls")):
+        dfm = pd.read_excel(arq_map)
+    else:
+        dfm = pd.read_csv(arq_map, sep=";", encoding="latin1")
+
+    dfm.columns = make_unique_columns(dfm.columns)
+
+    if "Cliente" not in dfm.columns or "Padrao" not in dfm.columns:
+        raise ValueError("Arquivo de mapeamento precisa ter colunas: Cliente e Padrao")
+
+    dfm["Cliente"] = dfm["Cliente"].astype(str).str.strip()
+    dfm["Padrao"] = dfm["Padrao"].astype(str).str.strip()
+
+    dfm = dfm[(dfm["Cliente"] != "") & (dfm["Padrao"] != "")]
+    if dfm.empty:
+        raise ValueError("Arquivo de mapeamento está vazio ou sem dados válidos.")
+
+    # Prepara estruturas normalizadas (padrões maiores primeiro)
+    regras = []
+    for cliente, padrao in zip(dfm["Cliente"], dfm["Padrao"]):
+        regras.append(
+            (
+                normalize_text(padrao),
+                str(cliente).strip(),
+                extrair_centro(cliente)
+            )
+        )
+
+    regras.sort(key=lambda x: len(x[0]), reverse=True)
+    return regras
 
 
 # ============================
 # FUNÇÃO PRINCIPAL
 # ============================
 
-def converter_w4(df_w4, df_categorias_prep, setor):
+def converter_w4(df_w4, df_categorias_prep, setor, regras_previdencia, debug=False):
 
-    df_w4 = df_w4.copy()
-    df_w4.columns = df_w4.columns.astype(str).str.strip()
+    cols = set(df_w4.columns)
 
-    if "Detalhe Conta / Objeto" not in df_w4.columns:
+    # Colunas obrigatórias (ajuste aqui caso seu W4 tenha nomes diferentes)
+    if "Detalhe Conta / Objeto" not in cols:
         raise ValueError(f"Coluna 'Detalhe Conta / Objeto' não existe no W4. Colunas: {list(df_w4.columns)}")
+    if "Valor total" not in cols:
+        raise ValueError(f"Coluna 'Valor total' não existe no W4. Colunas: {list(df_w4.columns)}")
+    if "Data da Tesouraria" not in cols:
+        raise ValueError(f"Coluna 'Data da Tesouraria' não existe no W4. Colunas: {list(df_w4.columns)}")
 
     col_cat = "Detalhe Conta / Objeto"
 
@@ -249,19 +170,21 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     # ============================
 
     col_desc_cat = "Descrição da categoria financeira"
+
     df["nome_base_w4"] = df[col_cat].astype(str).apply(normalize_text)
 
     df = df.merge(
         df_categorias_prep[["nome_base", col_desc_cat]],
         left_on="nome_base_w4",
         right_on="nome_base",
-        how="left"
+        how="left",
+        suffixes=("", "__cat")
     )
 
-    df["Categoria_final"] = df[col_desc_cat].where(df[col_desc_cat].notna(), df[col_cat])
+    df["Categoria_final"] = df[col_desc_cat].where(df[col_desc_cat].notna(), df[col_cat].astype(str))
 
     # ============================
-    # PREVIDÊNCIA: aplicar mapeamento (sem .loc com iteráveis)
+    # PREVIDÊNCIA: aplica regras do arquivo (somente para Previdência Brasil)
     # ============================
 
     df["ClienteFornecedor_final"] = ""
@@ -270,7 +193,13 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     if str(setor).strip() == "Previdência Brasil":
         detalhe_norm = df[col_cat].astype(str).apply(normalize_text)
 
-        pares = detalhe_norm.apply(buscar_cliente_previdencia)
+        def buscar(txt_norm):
+            for padrao_norm, cliente, centro in regras_previdencia:
+                if padrao_norm and padrao_norm in txt_norm:
+                    return cliente, centro
+            return "", ""
+
+        pares = detalhe_norm.apply(buscar)
         df["ClienteFornecedor_final"] = pares.apply(lambda x: x[0])
         df["CentroCusto_final"] = pares.apply(lambda x: x[1])
 
@@ -281,8 +210,13 @@ def converter_w4(df_w4, df_categorias_prep, setor):
             df["Categoria_final"].astype(str).to_numpy()
         )
 
+        if debug:
+            st.write("DEBUG: regras carregadas:", len(regras_previdencia))
+            st.write("DEBUG: linhas com cliente encontrado:", int(achou.sum()))
+            st.write(df.loc[achou, [col_cat, "ClienteFornecedor_final", "CentroCusto_final"]].head(30))
+
     # ============================
-    # PROCESSO / EMPRÉSTIMOS (regras sem loc “perigoso”)
+    # DESPESA / RECEITA
     # ============================
 
     fluxo = df.get("Fluxo", pd.Series("", index=df.index)).astype(str).str.lower()
@@ -292,63 +226,27 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     cond_fluxo_despesa = fluxo.str.contains("despesa", na=False)
     cond_imobilizado = fluxo.str.contains("imobilizado", na=False)
 
+    detalhe_lower = df[col_cat].astype(str).str.lower()
+    cond_palavra_despesa = fluxo_vazio & (
+        detalhe_lower.str.contains("custo", na=False) |
+        detalhe_lower.str.contains("despesa", na=False)
+    )
+
     proc_original = df.get("Processo", pd.Series("", index=df.index)).astype(str)
     proc = proc_original.str.lower().apply(
         lambda t: unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode("ascii")
     )
 
-    pessoa = df.get("Pessoa", pd.Series("", index=df.index)).astype(str)
-
-    cond_emprestimo = proc.str.contains("emprestimo", na=False)
-    cond_pag_emp = (cond_emprestimo & proc.str.contains("pagamento", na=False)).to_numpy()
-    cond_rec_emp = (cond_emprestimo & proc.str.contains("recebimento", na=False)).to_numpy()
-    cond_outros_emp = (cond_emprestimo & ~(cond_emprestimo & proc.str.contains("pagamento", na=False)) &
-                       ~(cond_emprestimo & proc.str.contains("recebimento", na=False))).to_numpy()
-
-    cat_arr = df["Categoria_final"].astype(str).to_numpy()
-    proc_arr = proc_original.astype(str).to_numpy()
-    pess_arr = pessoa.astype(str).to_numpy()
-
-    cat_arr = np.where(cond_pag_emp, proc_arr + " " + pess_arr, cat_arr)
-    cat_arr = np.where(cond_rec_emp, proc_arr + " " + pess_arr, cat_arr)
-    cat_arr = np.where(cond_outros_emp, proc_arr + " " + pess_arr, cat_arr)
-
-    df["Categoria_final"] = cat_arr
-
-    # ============================
-    # CLASSIFICAÇÃO DESPESA / RECEITA
-    # ============================
-
-    detalhe_lower = df[col_cat].astype(str).str.lower()
-
-    cond_palavra_despesa = (
-        fluxo_vazio &
-        (
-            detalhe_lower.str.contains("custo", na=False) |
-            detalhe_lower.str.contains("despesa", na=False)
-        )
-    )
-
     cond_pag_proc = fluxo_vazio & proc.str.contains("pagamento", na=False)
     cond_rec_proc = fluxo_vazio & proc.str.contains("recebimento", na=False)
 
-    is_despesa = (
-        cond_fluxo_despesa |
-        cond_imobilizado |
-        cond_palavra_despesa |
-        cond_pag_proc
-    ).to_numpy()
-
-    # Receita força False
+    is_despesa = (cond_fluxo_despesa | cond_imobilizado | cond_palavra_despesa | cond_pag_proc).to_numpy()
     is_despesa = np.where((cond_fluxo_receita | cond_rec_proc).to_numpy(), False, is_despesa)
     df["is_despesa"] = is_despesa
 
     # ============================
     # VALORES
     # ============================
-
-    if "Valor total" not in df.columns:
-        raise ValueError("Coluna 'Valor total' não existe no W4.")
 
     df["Valor_str_final"] = [
         converter_valor(v, d) for v, d in zip(df["Valor total"], df["is_despesa"])
@@ -358,13 +256,10 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     # DATAS
     # ============================
 
-    if "Data da Tesouraria" not in df.columns:
-        raise ValueError("Coluna 'Data da Tesouraria' não existe no W4.")
-
     data_tes = formatar_data_coluna(df["Data da Tesouraria"])
 
     # ============================
-    # MONTAGEM FINAL
+    # SAÍDA
     # ============================
 
     if "Descrição" not in df.columns:
@@ -400,25 +295,13 @@ def converter_w4(df_w4, df_categorias_prep, setor):
 
 
 # ============================
-# CARREGAR ARQUIVO W4
-# ============================
-
-def carregar_arquivo_w4(arq):
-    if arq.name.lower().endswith((".xlsx", ".xls")):
-        df = pd.read_excel(arq)
-    else:
-        df = pd.read_csv(arq, sep=";", encoding="latin1")
-    df.columns = df.columns.astype(str).str.strip()
-    return df
-
-
-# ============================
 # CARREGAR CATEGORIAS
 # ============================
 
 @st.cache_data
 def carregar_categorias():
     df_cat_raw = pd.read_excel("categorias_contabeis.xlsx")
+    df_cat_raw.columns = make_unique_columns(df_cat_raw.columns)
     return preparar_categorias(df_cat_raw)
 
 try:
@@ -439,16 +322,34 @@ setor = st.selectbox(
     ["Ass. Comunitária", "Sinodalidade", "Previdência Brasil"]
 )
 
-arq_w4 = st.file_uploader(
-    "Envie o arquivo W4 (CSV ou Excel)",
-    type=["csv", "xlsx", "xls"]
+st.markdown("### Mapeamento Previdência (OBRIGATÓRIO)")
+arq_map = st.file_uploader(
+    "Envie Excel/CSV com colunas: Cliente e Padrao",
+    type=["csv", "xlsx", "xls"],
+    key="map"
 )
 
-if arq_w4:
+debug = st.checkbox("DEBUG", value=False)
+
+st.markdown("### Arquivo W4")
+arq_w4 = st.file_uploader(
+    "Envie o arquivo W4 (CSV ou Excel)",
+    type=["csv", "xlsx", "xls"],
+    key="w4"
+)
+
+if arq_w4 and arq_map:
     if st.button("Converter planilha"):
         try:
+            regras_previdencia = carregar_mapeamento_upload(arq_map)
+
             df_w4 = carregar_arquivo_w4(arq_w4)
-            df_final = converter_w4(df_w4, df_cat_prep, setor)
+
+            if debug:
+                st.write("DEBUG: colunas do W4 (já saneadas):")
+                st.write(df_w4.columns.tolist())
+
+            df_final = converter_w4(df_w4, df_cat_prep, setor, regras_previdencia, debug=debug)
 
             st.success("Planilha convertida com sucesso!")
 
@@ -465,5 +366,8 @@ if arq_w4:
 
         except Exception as e:
             st.error(f"Erro: {e}")
+
+elif arq_w4 and not arq_map:
+    st.warning("Para Previdência, envie também o arquivo de mapeamento (Cliente e Padrao).")
 else:
-    st.info("Selecione um setor e envie o arquivo W4.")
+    st.info("Selecione um setor e envie o arquivo W4 e o mapeamento.")
