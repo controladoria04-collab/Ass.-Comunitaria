@@ -18,13 +18,6 @@ st.set_page_config(
 # ============================
 
 def normalize_text(texto):
-    """
-    Normaliza texto para comparação:
-    - minúsculo
-    - remove acentos
-    - troca qualquer coisa que não seja a-z/0-9 por espaço
-    - remove espaços duplicados
-    """
     texto = str(texto).lower().strip()
     texto = ''.join(
         c for c in unicodedata.normalize('NFKD', texto)
@@ -68,15 +61,12 @@ def converter_valor(valor_str, is_despesa):
 
 
 # ============================
-# PREVIDÊNCIA: MAPEAMENTO DIRETO (texto do W4 -> Cliente/Fornecedor)
+# PREVIDÊNCIA: MAPEAMENTO DIRETO
 # ============================
 
 CENTROS_CUSTO_VALIDOS = {"FORTALEZA", "DIACONIA", "EXTERIOR", "BRASIL"}
 
-# Cada item: (CLIENTE_OFICIAL, TEXTO_W4)
-# Regra: se "Detalhe Conta / Objeto" contiver TEXTO_W4 -> preenche cliente e troca categoria
 MAPEAMENTO_PREVIDENCIA = [
-    # --- (trecho anterior) ---
     ("APARECIDA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aparecida"),
     ("ARACAJU - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aracaju"),
     ("ARACATI - BRASIL", "Repasse Recebido Fundo de Previdência Missão Aracati"),
@@ -171,7 +161,7 @@ MAPEAMENTO_PREVIDENCIA = [
     ("PH - PROJETO MARIA MADALENA - FORTALEZA", "Repasse Recebido Fundo de Previdência Projeto Maria Madalena"),
     ("PH - SECRETARIA - FORTALEZA", "Repasse Recebido Fundo de Previdência Secretaria de PH Fortaleza"),
 
-    # --- (NOVOS ITENS QUE VOCÊ PEDIU) ---
+    # ---- NOVOS QUE VOCÊ PEDIU ----
     ("PIRACICABA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Piracicaba"),
     ("PONTA GROSSA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Ponta Grossa"),
     ("PREFEITURA - DIACONIA", "Repasse Recebido Fundo de Previdência Prefeitura"),
@@ -213,23 +203,14 @@ MAPEAMENTO_PREVIDENCIA = [
     ("VITÓRIA DA CONQUISTA - BRASIL", "Repasse Recebido Fundo de Previdência Missão Vitória da Conquista - Difusão"),
 ]
 
-# Pré-normaliza para busca rápida e resistente a acentos/pontuação
-MAPEAMENTO_PREVIDENCIA_NORM = [
-    (cliente, normalize_text(texto_w4))
-    for cliente, texto_w4 in MAPEAMENTO_PREVIDENCIA
-]
-
-def extrair_centro_custo_do_cliente(cliente: str) -> str:
-    """
-    Centro de custo é o texto após o ÚLTIMO ' - ' do cliente, se for válido.
-    Ex.: 'LUBANGO - EXTERIOR' -> 'EXTERIOR'
-    Ex.: 'PH - CASA RENATA COURAS - FORTALEZA' -> 'FORTALEZA'
-    """
-    partes = [p.strip() for p in str(cliente).split(" - ")]
-    if partes and partes[-1].upper() in CENTROS_CUSTO_VALIDOS:
-        return partes[-1].upper()
-    return ""
-
+# Pré-normalizado + centro de custo calculado
+MAPEAMENTO_PREVIDENCIA_PREP = []
+for cliente, texto_w4 in MAPEAMENTO_PREVIDENCIA:
+    cliente_str = str(cliente).strip()
+    texto_norm = normalize_text(texto_w4)
+    partes = [p.strip() for p in cliente_str.split(" - ")]
+    centro = partes[-1].upper() if partes and partes[-1].upper() in CENTROS_CUSTO_VALIDOS else ""
+    MAPEAMENTO_PREVIDENCIA_PREP.append((texto_norm, cliente_str, centro))
 
 # ============================
 # FUNÇÃO PRINCIPAL
@@ -274,7 +255,7 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     )
 
     # ============================
-    # PREVIDÊNCIA: MAPEAMENTO DIRETO
+    # PREVIDÊNCIA (sem erro de assign): mapeamento por linha
     # ============================
 
     df["ClienteFornecedor_final"] = ""
@@ -283,12 +264,19 @@ def converter_w4(df_w4, df_categorias_prep, setor):
     if str(setor).strip() == "Previdência Brasil":
         detalhe_norm = df[col_cat].astype(str).apply(normalize_text)
 
-        for cliente_oficial, texto_w4_norm in MAPEAMENTO_PREVIDENCIA_NORM:
-            mask = detalhe_norm.str.contains(texto_w4_norm, na=False)
-            if mask.any():
-                df.loc[mask, "Categoria_final"] = "11318 - Repasse Recebido Fundo de Previdência"
-                df.loc[mask, "ClienteFornecedor_final"] = cliente_oficial
-                df.loc[mask, "CentroCusto_final"] = extrair_centro_custo_do_cliente(cliente_oficial)
+        def buscar_mapeamento(txt_norm: str):
+            for padrao_norm, cliente, centro in MAPEAMENTO_PREVIDENCIA_PREP:
+                if padrao_norm and padrao_norm in txt_norm:
+                    return cliente, centro
+            return "", ""
+
+        resultados = detalhe_norm.apply(buscar_mapeamento)
+        df["ClienteFornecedor_final"] = resultados.apply(lambda x: x[0])
+        df["CentroCusto_final"] = resultados.apply(lambda x: x[1])
+
+        # Só troca categoria onde encontrou cliente
+        achou = df["ClienteFornecedor_final"].ne("")
+        df.loc[achou, "Categoria_final"] = "11318 - Repasse Recebido Fundo de Previdência"
 
     # ============================
     # PROCESSO / EMPRÉSTIMOS
@@ -434,7 +422,7 @@ def carregar_arquivo_w4(arq):
 
 
 # ============================
-# CARREGAR CATEGORIAS (cache + erro amigável)
+# CARREGAR CATEGORIAS
 # ============================
 
 @st.cache_data
