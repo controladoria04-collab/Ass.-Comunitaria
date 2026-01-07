@@ -67,6 +67,12 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
 
     col_cat = "Detalhe Conta / Objeto"
 
+    # >>> ALTERAÇÃO 2 — SUBSTITUIÇÃO FIXA <<<
+    df_w4[col_cat] = df_w4[col_cat].replace(
+        "Despesa com Repasse para Economato Geral - Encargos Folha de Pagamento",
+        "13089 - Desp. com Rep. Eco. Geral - Encargos Folha"
+    )
+
     # Remover transferências
     df = df_w4.loc[
         ~df_w4[col_cat].astype(str).str.contains(
@@ -94,7 +100,6 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
         df[col_cat]
     )
 
-    # Inicializa colunas
     df["Cliente/Fornecedor"] = ""
     df["Centro de Custo"] = ""
 
@@ -111,15 +116,11 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
             mask = detalhe_norm.str.contains(padrao, na=False)
 
             if mask.any():
-                df.loc[
-                    mask,
-                    "Categoria_final"
-                ] = "11318 - Repasse Recebido Fundo de Previdência"
-
-                # Cliente permanece inteiro
+                df.loc[mask, "Categoria_final"] = (
+                    "11318 - Repasse Recebido Fundo de Previdência"
+                )
                 df.loc[mask, "Cliente/Fornecedor"] = cliente_raw
 
-                # Centro de custo usa o texto após o ÚLTIMO "-"
                 if "-" in cliente_raw:
                     centro = cliente_raw.rsplit("-", 1)[1].strip().upper()
                     df.loc[mask, "Centro de Custo"] = centro
@@ -148,21 +149,8 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
     cond_pag_emp = cond_emprestimo & proc.str.contains("pagamento", na=False)
     cond_rec_emp = cond_emprestimo & proc.str.contains("recebimento", na=False)
 
-    df.loc[cond_pag_emp, "Categoria_final"] = (
-        proc_original[cond_pag_emp] + " " + pessoa[cond_pag_emp]
-    )
-
-    df.loc[cond_rec_emp, "Categoria_final"] = (
-        proc_original[cond_rec_emp] + " " + pessoa[cond_rec_emp]
-    )
-
-    df.loc[
-        cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp,
-        "Categoria_final"
-    ] = (
-        proc_original[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp]
-        + " "
-        + pessoa[cond_emprestimo & ~cond_pag_emp & ~cond_rec_emp]
+    df.loc[cond_emprestimo, "Categoria_final"] = (
+        proc_original[cond_emprestimo] + " " + pessoa[cond_emprestimo]
     )
 
     # ============================
@@ -245,7 +233,24 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
 
 
 # ============================
-# CARREGAR ARQUIVO W4
+# NOME DO ARQUIVO
+# ============================
+MAPA_MESES = {
+    "01": "jan", "02": "fev", "03": "marc", "04": "abr",
+    "05": "mai", "06": "jun", "07": "jul", "08": "ago",
+    "09": "set", "10": "out", "11": "nov", "12": "dez"
+}
+
+def gerar_nome_arquivo(df):
+    empresa = str(df["Empresa"].iloc[0]).strip()
+    disponivel = str(df["Disponível"].iloc[0]).strip()
+    datas = pd.to_datetime(df["Data da Tesouraria"], errors="coerce")
+    mes = datas.dt.strftime("%m").dropna().iloc[0]
+    return f"{empresa} {disponivel} {MAPA_MESES.get(mes, mes)}.xlsx"
+
+
+# ============================
+# CARREGAMENTOS
 # ============================
 def carregar_arquivo_w4(arq):
     if arq.name.lower().endswith((".xlsx", ".xls")):
@@ -253,15 +258,9 @@ def carregar_arquivo_w4(arq):
     return pd.read_csv(arq, sep=";", encoding="latin1")
 
 
-# ============================
-# CARREGAR CATEGORIAS
-# ============================
 df_cat_raw = pd.read_excel("categorias_contabeis.xlsx")
 df_cat_prep = preparar_categorias(df_cat_raw)
 
-# ============================
-# CARREGAR MAPEAMENTO PREVIDÊNCIA
-# ============================
 df_map_prev = pd.read_excel("mapeamento_previdencia.xlsx")
 df_map_prev["Padrao_norm"] = df_map_prev["Padrao"].apply(normalize_text)
 
@@ -284,14 +283,7 @@ if arq_w4:
     if st.button("Converter planilha"):
         try:
             df_w4 = carregar_arquivo_w4(arq_w4)
-            df_final = converter_w4(
-                df_w4,
-                df_cat_prep,
-                setor,
-                df_map_prev
-            )
-
-            st.success("Planilha convertida com sucesso!")
+            df_final = converter_w4(df_w4, df_cat_prep, setor, df_map_prev)
 
             buffer = BytesIO()
             df_final.to_excel(buffer, index=False, engine="openpyxl")
@@ -300,7 +292,7 @@ if arq_w4:
             st.download_button(
                 label="Baixar planilha convertida",
                 data=buffer,
-                file_name="planilha_convertida_setor.xlsx",
+                file_name=gerar_nome_arquivo(df_w4),
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
