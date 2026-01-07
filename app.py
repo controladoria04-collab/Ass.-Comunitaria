@@ -67,7 +67,7 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
 
     col_cat = "Detalhe Conta / Objeto"
 
-    # >>> ALTERAÇÃO 2 — SUBSTITUIÇÃO FIXA <<<
+    # SUBSTITUIÇÃO FIXA SOLICITADA
     df_w4[col_cat] = df_w4[col_cat].replace(
         "Despesa com Repasse para Economato Geral - Encargos Folha de Pagamento",
         "13089 - Desp. com Rep. Eco. Geral - Encargos Folha"
@@ -146,8 +146,6 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
     pessoa = df.get("Pessoa", pd.Series("", index=df.index)).astype(str)
 
     cond_emprestimo = proc.str.contains("emprestimo", na=False)
-    cond_pag_emp = cond_emprestimo & proc.str.contains("pagamento", na=False)
-    cond_rec_emp = cond_emprestimo & proc.str.contains("recebimento", na=False)
 
     df.loc[cond_emprestimo, "Categoria_final"] = (
         proc_original[cond_emprestimo] + " " + pessoa[cond_emprestimo]
@@ -242,11 +240,10 @@ MAPA_MESES = {
 }
 
 def gerar_nome_arquivo(df):
-    empresa = str(df["Empresa"].iloc[0]).strip()
     disponivel = str(df["Disponível"].iloc[0]).strip()
     datas = pd.to_datetime(df["Data da Tesouraria"], errors="coerce")
     mes = datas.dt.strftime("%m").dropna().iloc[0]
-    return f"{empresa} {disponivel} {MAPA_MESES.get(mes, mes)}.xlsx"
+    return f"{disponivel} - {MAPA_MESES.get(mes, mes)}.xlsx"
 
 
 # ============================
