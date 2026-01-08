@@ -3,6 +3,7 @@ import pandas as pd
 from io import BytesIO
 import unicodedata
 import re
+from openpyxl import load_workbook
 
 # ============================
 # CONFIG DO APP
@@ -46,16 +47,32 @@ def formatar_data_coluna(serie):
 
 
 def converter_valor(valor_str, is_despesa):
-    if pd.isna(valor_str):
-        return ""
+    """
+    Agora retorna NÚMERO (float) para não ficar como texto no Excel.
+    Mantém sinal: despesa negativa.
+    """
+    if pd.isna(valor_str) or str(valor_str).strip() == "":
+        return None
 
     if isinstance(valor_str, (int, float)):
-        base = f"{valor_str:.2f}".replace(".", ",")
+        val = float(valor_str)
     else:
-        base = str(valor_str).strip()
+        s = str(valor_str).strip()
+        # remove símbolos e espaços, mantém sinal se houver
+        s = s.replace("R$", "").replace(" ", "")
+        # troca separador pt-BR para padrão float
+        s = s.replace(".", "").replace(",", ".")
+        try:
+            val = float(s)
+        except ValueError:
+            return None
 
-    base_sem_sinal = base.lstrip("+- ").strip()
-    return ("-" if is_despesa else "") + base_sem_sinal
+    if is_despesa:
+        val = -abs(val)
+    else:
+        val = abs(val)
+
+    return val
 
 
 # ============================
@@ -102,6 +119,17 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
 
     df["Cliente/Fornecedor"] = ""
     df["Centro de Custo"] = ""
+
+    # ============================
+    # ASS. COMUNITÁRIA — CENTRO DE CUSTO VIA "EMPRESA"
+    # ============================
+    if setor == "Ass. Comunitária" and "Empresa" in df.columns:
+        empresa = df["Empresa"].fillna("").astype(str).str.strip()
+
+        df["Centro de Custo"] = empresa.replace({
+            "Escritório Assistência Comunitária": "Escritório",
+            "Fundo Assistência Comunitária": "Fundo"
+        })
 
     # ============================
     # PREVIDÊNCIA BRASIL — REPASSES
@@ -177,9 +205,9 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
     df.loc[cond_fluxo_receita | cond_rec_proc, "is_despesa"] = False
 
     # ============================
-    # VALORES
+    # VALORES (AGORA NUMÉRICO)
     # ============================
-    df["Valor_str_final"] = [
+    df["Valor_final"] = [
         converter_valor(v, d)
         for v, d in zip(df["Valor total"], df["is_despesa"])
     ]
@@ -210,7 +238,7 @@ def converter_w4(df_w4, df_categorias_prep, setor, df_map_prev):
     out["Data de Competência"] = data_tes
     out["Data de Vencimento"] = data_tes
     out["Data de Pagamento"] = data_tes
-    out["Valor"] = df["Valor_str_final"]
+    out["Valor"] = df["Valor_final"]  # NUMÉRICO
     out["Categoria"] = df["Categoria_final"]
 
     if "Id Item tesouraria" in df.columns:
@@ -286,9 +314,26 @@ if arq_w4:
             df_final.to_excel(buffer, index=False, engine="openpyxl")
             buffer.seek(0)
 
+            # Garantir que "Valor" fique como número no Excel (com 2 casas)
+            wb = load_workbook(buffer)
+            ws = wb.active
+
+            # achar a coluna "Valor"
+            header = [cell.value for cell in ws[1]]
+            if "Valor" in header:
+                col_idx = header.index("Valor") + 1
+                for row in range(2, ws.max_row + 1):
+                    cell = ws.cell(row=row, column=col_idx)
+                    if isinstance(cell.value, (int, float)):
+                        cell.number_format = "0.00"
+
+            buffer2 = BytesIO()
+            wb.save(buffer2)
+            buffer2.seek(0)
+
             st.download_button(
                 label="Baixar planilha convertida",
-                data=buffer,
+                data=buffer2,
                 file_name=gerar_nome_arquivo(df_w4),
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
